@@ -34,6 +34,8 @@
               lightning
               torchmetrics
 	      wandb
+              scipy
+	      plotly
 
               # Self built
               snntorch

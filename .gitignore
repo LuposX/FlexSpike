@@ -14,3 +14,7 @@ surrogate/pLSNN/*
 surrogate/wandb/*
 surrogate/.temp/*
 surrogate/data/small_dataset.ds
+utils/*.png
+utils/*.pdf
+utils/*.jpg
+utils/*.jpeg

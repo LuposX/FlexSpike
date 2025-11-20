@@ -9,9 +9,11 @@ import torch.nn as nn
 
 import re
 
+from utils.src_cell import SRC
 
 class SpikeSynth(L.LightningModule):
-    def __init__(self,
+    def __init__(
+                 self,
                  num_hidden_layers,
                  num_hidden,
                  beta,
@@ -33,6 +35,7 @@ class SpikeSynth(L.LightningModule):
                  bntt_time_steps=None,
                  train_dataset=None,
                  valid_dataset=None,
+                 SRC_config: dict | None = None
                  ):
         """
         Initializes the SpikeSynth model, a spiking neural network (SNN). 
@@ -109,7 +112,10 @@ class SpikeSynth(L.LightningModule):
 
             use_layernorm (bool):
                 If layernorm should be used afetr every Lif layer.
-        """
+
+            SRC_config (dict):
+                Defines how SRC works possible entries. Default: float = 0.9, rho: float = 3.0, r: float = 2.0, rs: float = -7.0, z: float = 0.0, zhyp_s: float = 0.9, zdep_s: float = 0.0, bh_init: float = -6.0, bh_max: float = -4.0, detach_rec: bool = True, relu_bypass: bool = True. See paper "Spike-based computation using classical recurrent neural networks".
+        """  
         super().__init__()
 
         self.num_params = 6
@@ -119,11 +125,30 @@ class SpikeSynth(L.LightningModule):
         self.valid_dataset = valid_dataset
         self.max_epochs = max_epochs
         self.surrogate_gradient = surrogate_gradient
+        self.SRC_config = SRC_config
 
         self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset"])
 
         if neuron_type == "SLSTM" and dropout != 0:
             raise ValueError("SLSTM doesn't support dropout.")
+
+        # If user selected SRC but SRC implementation couldn't be imported, fail fast
+        if neuron_type == "SRC" and SRC is None:
+            raise ImportError(
+                "SRC neuron type requested but `SRC.SRC` could not be imported."
+                " Please ensure `SRC.py` is available and contains the SRC class."
+            )
+
+        # If SRC was selected, some features are incompatible — check and fail early.
+        if neuron_type == "SRC":
+            if use_bntt:
+                raise ValueError("SRC neurons do not support BNTT (use_bntt=True).")
+            if use_layernorm:
+                raise ValueError("SRC neurons do not support LayerNorm (use_layernorm=True).")
+            if temporal_skip != -1:
+                raise ValueError("SRC neurons do not support temporal skip connections (temporal_skip must be -1).")
+            if layer_skip > 0:
+                raise ValueError("SRC neurons do not support layer-skip connections (layer_skip must be 0).")
 
         self.norm = nn.LayerNorm(self.num_inputs + self.num_params)
         self.lif_layers = nn.ModuleList()
@@ -174,10 +199,30 @@ class SpikeSynth(L.LightningModule):
                     self.leaky_linears.append(nn.Linear(input_size, self.hparams.num_hidden))
                 else:
                     self.leaky_linears.append(nn.Linear(self.hparams.num_hidden, self.hparams.num_hidden))
+            elif neuron_type == "SRC":
+                # Create SRC layer. We purposely do not wire up BNTT, LayerNorm
+                # or skip projections for SRC (they were validated in __init__).
+                # The SRC implementation expects `input_size` and `hidden_size`.
+                layer = SRC(
+                    input_size=input_size,
+                    hidden_size=self.hparams.num_hidden,
+                    **(self.SRC_config or {})
+                )
             else:
                 raise ValueError(f"Unknown neuron_type: {neuron_type}")
 
             self.lif_layers.append(layer)
+
+            # For SRC we do not apply temporal or layer skips (already validated),
+            # so set identity / None placeholders for API compatibility.
+            if neuron_type == "SRC":
+                self.temp_skip_projs.append(nn.Identity())
+                self.layer_skip_projs.append(None)
+                self.layer_bntt.append(None)
+                self.layer_norms.append(None)
+                # advance input_size for next layer
+                input_size = self.hparams.num_hidden
+                continue
 
             if input_size != self.hparams.num_hidden and self.hparams.temporal_skip != -1:
                 self.temp_skip_projs.append(nn.Linear(input_size, self.hparams.num_hidden))
@@ -310,6 +355,7 @@ class SpikeSynth(L.LightningModule):
 
         # ------------------ SLSTM branch ------------------
         if neuron_type == "SLSTM":
+            # (unchanged)
             num_layers = len(self.lif_layers)
             syn_states = []
             mem_states = []
@@ -357,6 +403,7 @@ class SpikeSynth(L.LightningModule):
 
         # ------------------ Leaky (per-step) branch ------------------
         elif neuron_type == "Leaky":
+            # (unchanged)
             num_layers = len(self.lif_layers)
             mem_states = [layer.init_leaky().to(x_seq.device) for layer in self.lif_layers]
             track_layer_time = (skip_k != -1)
@@ -397,6 +444,7 @@ class SpikeSynth(L.LightningModule):
 
         # ------------------ RLeaky (per-step) branch ------------------
         elif neuron_type == "RLeaky":
+            # (unchanged)
             num_layers = len(self.lif_layers)
             spk_states = []
             mem_states = []
@@ -443,7 +491,32 @@ class SpikeSynth(L.LightningModule):
             x_seq = last_layer_seq
 
         # ------------------ LeakyParallel / default sequence-processing neuron ------------------
+        elif neuron_type == "SRC":
+            # SRC handles the full sequence input (T, B, F). It returns (sout, (i,h,hs)).
+            layer_outputs = []
+            for i, lif in enumerate(self.lif_layers):
+                input_seq = x_seq  # (T, B, F_in or F_hidden)
+
+                # For SRC we previously validated that temporal and layer skips
+                # are not requested, so we skip those steps here.
+
+                # Normalization & BNTT are also not applied for SRC in this
+                # integration, so we skip _norm_and_bntt.
+
+                # feed into SRC layer
+                lif_out, _states = lif(input_seq)  # lif_out: (T, B, F_hidden)
+
+                # record spikes
+                # lif_out is already the spike-like output (ReLU on h); use mean
+                self.spike_counts.append(lif_out.mean())
+
+                # update x_seq for next layer
+                x_seq = lif_out
+
+                layer_outputs.append(x_seq)
+
         else:
+            # existing LeakyParallel behavior (unchanged)
             layer_outputs = []
             for i, lif in enumerate(self.lif_layers):
                 # --- ORDER: 1) compute temporal + layer skip on input sequence, 2) normalize, 3) feed into lif ---
@@ -506,10 +579,10 @@ class SpikeSynth(L.LightningModule):
         for name, param in self.named_parameters():
             if param.grad is None:
                 continue
-        
+
             # name examples: "lif_layers.0.rleaky.weight", "leaky_linears.2.weight", "output_layer.weight"
             parts = name.split('.')
-        
+
             # If it's one of our ModuleLists, try to keep the index (e.g. 'leaky_linears.2')
             module_lists = {
                 "lif_layers",
@@ -519,7 +592,7 @@ class SpikeSynth(L.LightningModule):
                 "layer_bntt",
                 "layer_norms",
             }
-        
+
             if parts[0] in module_lists and len(parts) > 1 and parts[1].isdigit():
                 layer_name = f"{parts[0]}.{parts[1]}"   # e.g. "leaky_linears.2"
             elif parts[0] == "lif_layers" and len(parts) > 1:
@@ -529,9 +602,9 @@ class SpikeSynth(L.LightningModule):
             else:
                 # fallback to top-level module name for other params (e.g. output_layer)
                 layer_name = parts[0]
-        
+
             grad_means.setdefault(layer_name, []).append(param.grad.abs().mean().item())
-        
+
         # average and prefix with a clear metric name
         grad_means = {
             f"grad_mean/{layer}": sum(vals) / len(vals)
@@ -592,4 +665,3 @@ class SpikeSynth(L.LightningModule):
             shuffle=False,
             num_workers=4,
         )
-

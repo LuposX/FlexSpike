@@ -140,6 +140,7 @@ def main(args):
     scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
     optimizer_class = get_optimizer_class(args.optimizer_class)
     optimizer_kwargs = parse_optimizer_kwargs(args.optimizer_kwargs)
+    SRC_config = parse_optimizer_kwargs(args.src_config)
 
     # Checkpoint callback
     os.makedirs(args.checkpoint_path, exist_ok=True)
@@ -210,7 +211,8 @@ def main(args):
             log_every_n_steps=args.log_every_n_steps,
             use_layernorm=args.use_layernorm,
             scheduler_class=scheduler_class,
-            scheduler_kwargs=scheduler_kwargs
+            scheduler_kwargs=scheduler_kwargs,
+            SRC_config=SRC_config
         )
 
         # Optional torch.compile
@@ -275,7 +277,13 @@ if __name__ == "__main__":
     parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not. Batchnorm is applied for LeakyParallel after the Spike, which doesnt work well and for Leaky and RLeak neuron directly to the input (WX) and for SLSTM to the input.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
     parser.add_argument("--use-layernorm", type=str2bool, default=False, help="Whether to use Layernorm or not.")
-    parser.add_argument("--neuron-type", type=str, choices=["LeakyParallel", "Leaky", "RLeaky", "SLSTM"], default="LeakyParallel", help="Which type of spiking neuron to use for the spiking layers.")
+    parser.add_argument("--neuron-type", type=str, choices=["LeakyParallel", "Leaky", "RLeaky", "SLSTM", "SRC"], default="LeakyParallel", help="Which type of spiking neuron to use for the spiking layers.")
+    parser.add_argument("--src-config",type=str,default="",help=(
+        "SRC configuration as key=value pairs separated by commas, e.g. "
+        "'alpha=0.9,rho=3.0,r=6.0,rs=8.0,bh_init=-6.0,bh_max=-4.0'. "
+        "These will be passed directly to the SRC constructor."),
+        )
+
 
     # Training hyperparameters
     parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")
