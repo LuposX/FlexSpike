@@ -267,7 +267,7 @@ if __name__ == "__main__":
     # Model hyperparameters
     parser.add_argument("--num-hidden", type=int, default=256, help="Number of hidden units.")
     parser.add_argument("--num-hidden-layers", type=int, default=4, help="Number of hidden layers.")
-    parser.add_argument("--beta", type=float, default=0.9, help="Beta (optimizer momentum-like).")
+    parser.add_argument("--beta", type=float, default=0.9, help="Beta decay Value. Has no impact when SRC is used as neuron type, then instead configure src-config.")
     parser.add_argument("--temporal-skip", type=int, default=-1, help="Temporal skip value (or None).")
     parser.add_argument("--layer-skip", type=int, default=2, help="Layer skip value.")
     parser.add_argument("--surrogate", type=str, default="atan", help="Surrogate gradient to use (e.g. 'atan').")

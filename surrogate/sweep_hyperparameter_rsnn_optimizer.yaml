@@ -29,7 +29,7 @@ parameters:
     value: 64
 
   beta:
-    value: 0.8
+    value: 0.8 
 
   surrogate_gradient:
     value: "atan"

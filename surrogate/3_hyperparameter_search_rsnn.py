@@ -29,6 +29,93 @@ import snntorch as snn
 
 from utils.RSNN import SpikeSynth
 
+import ast
+from collections.abc import Mapping
+
+# put this near the top of the file (with other imports)
+SRC_ALLOWED_KEYS = {
+    "alpha",
+    "rho",
+    "r",
+    "rs",
+    "z",
+    "zhyp_s",
+    "zdep_s",
+    "bh_init",
+    "bh_max",
+    "detach_rec",
+    "relu_bypass",
+}
+
+def _coerce_value(v):
+    """Try to coerce a wandb-provided value (possibly string) into int/float/bool if meaningful."""
+    # Already a sensible python type
+    if isinstance(v, (int, float, bool)):
+        return v
+    if v is None:
+        return None
+    # Strings: try ast.literal_eval first (safe)
+    if isinstance(v, str):
+        s = v.strip()
+        # Common boolean representations:
+        if s.lower() in ("true", "false"):
+            return s.lower() == "true"
+        try:
+            # literal_eval will convert numbers, tuples, lists, True/False, None
+            return ast.literal_eval(s)
+        except Exception:
+            # fallback: try float then int
+            try:
+                if "." in s:
+                    return float(s)
+                return int(s)
+            except Exception:
+                return s  # give up, return original string
+    # For other container types (e.g., wandb AttrDict), return as-is
+    return v
+
+def _to_plain_dict(m):
+    """Convert mappings or wandb AttrDict-like objects to plain dict safely."""
+    if isinstance(m, Mapping):
+        try:
+            return dict(m)
+        except Exception:
+            # fallback iterate
+            return {k: m[k] for k in m}
+    return m
+
+def build_src_config_from_wandb(config):
+    """
+    Build an SRC_config dict from wandb.config.
+
+    Accepts:
+      - nested config.SRC_config (dict / AttrDict)
+      - flattened keys like config.SRC_alpha, config.SRC_rho, ...
+    Returns:
+      dict with whitelisted keys only.
+    """
+    src = {}
+
+    # 1) If there's a nested SRC_config use it (convert to plain dict/AttrDict)
+    if hasattr(config, "SRC_config") and getattr(config, "SRC_config") is not None:
+        nested = getattr(config, "SRC_config")
+        nested = _to_plain_dict(nested)
+        if isinstance(nested, dict):
+            for k, v in nested.items():
+                if k in SRC_ALLOWED_KEYS:
+                    src[k] = _coerce_value(v)
+
+    # 2) Also check for flattened keys like SRC_alpha
+    for k in SRC_ALLOWED_KEYS:
+        flatname = f"SRC_{k}"
+        if hasattr(config, flatname):
+            # Flattened takes precedence (overrides nested) if present
+            src[k] = _coerce_value(getattr(config, flatname))
+
+    # 3) If nothing found, return empty dict
+    return src
+
+
 
 def build_surrogate(surr_name, config):
     """Dynamically build a surrogate gradient callable from its name and sweep config."""
@@ -140,6 +227,17 @@ def training_run():
 
         optimizer_class, optimizer_kwargs = built_optimizer(config)
 
+        # Build SRC_config (handles nested and flattened forms)
+        SRC_config = build_src_config_from_wandb(config)
+        
+        # If user selected SRC but no SRC_config set, that's ok: SRC will use defaults.
+        # Optionally warn if neuron_type is SRC but src_config empty (informational)
+        if config.get("neuron_type", None) == "SRC" and not SRC_config:
+            # optional: keep this log to notice missing explicit SRC params
+            print("[sweep] NOTE: running SRC neuron with default SRC params (SRC_config empty).")
+
+
+
         # Build model instance (mirror your original kwargs)
         model = SpikeSynth(
             optimizer_class=optimizer_class,
@@ -162,7 +260,8 @@ def training_run():
             log_every_n_steps=2,
             use_layernorm=config.use_layernorm,
             scheduler_class=scheduler_class,
-            scheduler_kwargs=scheduler_kwargs
+            scheduler_kwargs=scheduler_kwargs,
+            SRC_config=SRC_config
         )
 
         # Setup WandbLogger for PyTorch Lightning
