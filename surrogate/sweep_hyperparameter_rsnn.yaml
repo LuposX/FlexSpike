@@ -44,6 +44,10 @@ parameters:
     value: ""
   data_path:
       value: "./data/small_dataset.ds"
+  loss_fn:
+    values: ["mse", "mae", "huber", "logcosh", "pearson"]
+  loss_kwargs:
+    value: []
   epochs:
     value: 40
 run_cap: 50

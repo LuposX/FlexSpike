@@ -27,6 +27,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities.model_summary import ModelSummary
 
+from typing import Callable, Union, Optional
+
 from utils.RSNN import SpikeSynth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -142,6 +144,8 @@ def main(args):
     optimizer_kwargs = parse_optimizer_kwargs(args.optimizer_kwargs)
     SRC_config = parse_optimizer_kwargs(args.src_config)
 
+    loss_kwargs = parse_optimizer_kwargs(args.loss_kwargs)
+
     # Checkpoint callback
     os.makedirs(args.checkpoint_path, exist_ok=True)
     checkpoint_callback = ModelCheckpoint(
@@ -212,7 +216,9 @@ def main(args):
             use_layernorm=args.use_layernorm,
             scheduler_class=scheduler_class,
             scheduler_kwargs=scheduler_kwargs,
-            SRC_config=SRC_config
+            SRC_config=SRC_config,
+            loss_fn=args.loss_fn,
+            loss_kwargs=loss_kwargs,
         )
 
         # Optional torch.compile
@@ -284,7 +290,6 @@ if __name__ == "__main__":
         "These will be passed directly to the SRC constructor."),
         )
 
-
     # Training hyperparameters
     parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")
     parser.add_argument("--lr", type=float, default=0.005, help="Learning rate.")
@@ -299,9 +304,8 @@ if __name__ == "__main__":
     parser.add_argument("--early-stopping", type=str2bool, default=True, help="Enable early stopping.")
     parser.add_argument("--early-stopping-patience", type=int, default=10, help="Number of epochs with no improvement after which training stops.")
     parser.add_argument("--early-stopping-delta", type=float, default=1e-4, help="Minimum change in monitored quantity to qualify as improvement.")
-
-
-
+    parser.add_argument("--loss-fn", type=str, default="mse", help="Loss function to use; e.g. 'mse','mae','huber','logcosh','pearson'.")
+    parser.add_argument("--loss-kwargs", type=str, default="", help="Optional loss kwargs as key=value pairs separated by commas, e.g. 'delta=0.5' for Huber.")
 
     args = parser.parse_args()
 

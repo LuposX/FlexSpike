@@ -4,12 +4,15 @@ import snntorch as snn
 from snntorch._layers.bntt import BatchNormTT1d
 
 import pytorch_lightning as L
+import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
 import re
 
 from utils.src_cell import SRC
+
+from typing import Callable, Union, Optional
 
 class SpikeSynth(L.LightningModule):
     def __init__(
@@ -35,7 +38,9 @@ class SpikeSynth(L.LightningModule):
                  bntt_time_steps=None,
                  train_dataset=None,
                  valid_dataset=None,
-                 SRC_config: dict | None = None
+                 SRC_config: dict | None = None,
+                 loss_fn: Union[str, Callable] = "mse",
+                 loss_kwargs: Optional[dict] = None,
                  ):
         """
         Initializes the SpikeSynth model, a spiking neural network (SNN). 
@@ -115,6 +120,11 @@ class SpikeSynth(L.LightningModule):
 
             SRC_config (dict):
                 Defines how SRC works possible entries. Default: float = 0.9, rho: float = 3.0, r: float = 2.0, rs: float = -7.0, z: float = 0.0, zhyp_s: float = 0.9, zdep_s: float = 0.0, bh_init: float = -6.0, bh_max: float = -4.0, detach_rec: bool = True, relu_bypass: bool = True. See paper "Spike-based computation using classical recurrent neural networks".
+                loss_fn (string): 
+                    name or callable for the loss. If string, supported names: 'mse','mae','huber','logcosh','pearson'.
+                    
+                loss_kwargs (optional dict):
+                    forwarded to some losses (e.g. {'delta':0.5} for huber).
         """  
         super().__init__()
 
@@ -161,6 +171,58 @@ class SpikeSynth(L.LightningModule):
         self._build_layers(neuron_type, bntt_time_steps)
 
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
+
+        # Build the actual loss callable from the provided spec
+        self._build_loss()
+
+    def _build_loss(self):
+        """Construct a callable self.loss(preds, targets) from the user-provided spec.
+        Accepts a callable or one of a set of string names. If unknown string -> ValueError.
+        """
+        spec = self.hparams.loss_fn
+        kwargs = dict(self.hparams.loss_kwargs or {})
+        
+        # If user passed a callable, use it directly
+        if callable(spec):
+            self.loss = spec
+            try:
+                self._loss_name = getattr(spec, "__name__", "callable_loss")
+            except Exception:
+                self._loss_name = "callable_loss"
+            return
+          
+        # Otherwise expect a string
+        if not isinstance(spec, str):
+            raise ValueError("loss_fn must be a string name or a callable")
+        
+        s = spec.strip().lower()
+        if s in ("mse", "mse_loss"):
+            crit = nn.MSELoss()
+            self.loss = lambda p, t: crit(p, t)
+            self._loss_name = "mse"
+        elif s in ("mae", "l1", "l1_loss"):
+            crit = nn.L1Loss()
+            self.loss = lambda p, t: crit(p, t)
+            self._loss_name = "mae"
+        elif s in ("huber", "smooth_l1", "smooth_l1_loss"):
+            delta = kwargs.get("delta", 1.0)
+            self.loss = lambda p, t, _d=delta: F.smooth_l1_loss(p, t, beta=_d)
+            self._loss_name = f"huber(delta={delta})"
+        elif s in ("logcosh", "log_cosh"):
+            self.loss = lambda p, t: torch.mean(torch.log(torch.cosh(p - t + 1e-12)))
+            self._loss_name = "logcosh"
+        elif s in ("pearson", "corr", "correlation"):
+            def _pearson(p, t, eps=1e-8):
+                p_c = p - p.mean(dim=1, keepdim=True)
+                t_c = t - t.mean(dim=1, keepdim=True)
+                num = (p_c * t_c).sum(dim=1)
+                den = torch.sqrt((p_c ** 2).sum(dim=1) * (t_c ** 2).sum(dim=1)) + eps
+                corr = num / den
+                return torch.mean(1.0 - corr)
+            self.loss = _pearson
+            self._loss_name = "pearson"
+        else:
+            raise ValueError(f"Unknown loss_fn string '{spec}'. Supported: 'mse','mae','huber','logcosh','pearson' or pass a callable.")
 
     def _build_layers(self, neuron_type, bntt_time_steps):
         input_size = self.num_inputs + self.num_params
@@ -565,7 +627,8 @@ class SpikeSynth(L.LightningModule):
     def training_step(self, batch, batch_idx):
         X_batch, y_batch = batch
         outputs = self(X_batch)
-        loss = torch.nn.MSELoss()(outputs, y_batch.float())
+        # loss = torch.nn.MSELoss()(outputs, y_batch.float())
+        loss = self.loss(outputs, y_batch.float())
         self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
 
         spike_logs = {
@@ -618,7 +681,8 @@ class SpikeSynth(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         X_batch, y_batch = batch
         outputs = self(X_batch)
-        loss = torch.nn.MSELoss()(outputs, y_batch.float())
+        # loss = torch.nn.MSELoss()(outputs, y_batch.float())
+        loss = self.loss(outputs, y_batch.float())
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 

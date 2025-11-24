@@ -194,6 +194,35 @@ def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
 
     return scheduler_class, kwargs
 
+def parse_loss_kwargs(kwargs_str):
+    """Parse comma-separated key=value pairs into a dict, safely handling tuples and scientific notation."""
+    kwargs = {}
+    if not kwargs_str:
+        return kwargs
+
+    # Split on commas that are NOT inside parentheses
+    parts = re.split(r',(?![^(]*\))', kwargs_str)
+
+    for kv in parts:
+        if "=" not in kv:
+            continue
+        key, value = kv.split("=", 1)
+        key, value = key.strip(), value.strip()
+
+        # Try to safely evaluate Python literals (numbers, tuples, lists, bools)
+        try:
+            value = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            # Fallback: handle booleans or keep as string
+            if value.lower() in ["true", "false"]:
+                value = value.lower() == "true"
+            else:
+                value = value
+
+        kwargs[key] = value
+
+    return kwargs
+
 
 
 def training_run():
@@ -227,6 +256,8 @@ def training_run():
 
         optimizer_class, optimizer_kwargs = built_optimizer(config)
 
+        loss_kwargs = parse_loss_kwargs(config.loss_kwargs)
+
         # Build SRC_config (handles nested and flattened forms)
         SRC_config = build_src_config_from_wandb(config)
         
@@ -235,7 +266,6 @@ def training_run():
         if config.get("neuron_type", None) == "SRC" and not SRC_config:
             # optional: keep this log to notice missing explicit SRC params
             print("[sweep] NOTE: running SRC neuron with default SRC params (SRC_config empty).")
-
 
 
         # Build model instance (mirror your original kwargs)
@@ -261,7 +291,9 @@ def training_run():
             use_layernorm=config.use_layernorm,
             scheduler_class=scheduler_class,
             scheduler_kwargs=scheduler_kwargs,
-            SRC_config=SRC_config
+            SRC_config=SRC_config,
+            loss_fn=config.loss_fn,
+            loss_kwargs=loss_kwargs
         )
 
         # Setup WandbLogger for PyTorch Lightning
