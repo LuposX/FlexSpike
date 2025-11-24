@@ -1,0 +1,82 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+wandb: Agent Starting Run: inqbl97l with config:
+wandb: 	alpha: 0.85
+wandb: 	batch_size: 2048
+wandb: 	beta: 0
+wandb: 	bh_init: -6
+wandb: 	bh_max: -3
+wandb: 	bntt_time_steps: 100
+wandb: 	data_path: ./data/small_dataset.ds
+wandb: 	detach_rec: False
+wandb: 	dropout: 0
+wandb: 	epochs: 40
+wandb: 	layer_skip: 0
+wandb: 	lr: 2.604389634337969e-06
+wandb: 	neuron_type: SRC
+wandb: 	num_hidden: 128
+wandb: 	num_hidden_layers: 16
+wandb: 	optimizer_class: AdamW
+wandb: 	r: 2
+wandb: 	relu_bypass: True
+wandb: 	rho: 1
+wandb: 	rs: -3
+wandb: 	scheduler_class: cosine
+wandb: 	scheduler_kwargs: 
+wandb: 	surrogate_gradient: atan
+wandb: 	temporal_skip: -1
+wandb: 	use_bntt: False
+wandb: 	use_layernorm: False
+wandb: 	z: 0
+wandb: 	zdep_s: 0.1
+wandb: 	zhyp_s: 1
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251124_104622-inqbl97l
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run polar-sweep-1
+wandb: ⭐️ View project at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: 🧹 View sweep at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/sweeps/w4qpaf9p
+wandb: 🚀 View run at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/inqbl97l
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/loggers/wandb.py:397: There is a wandb run already in progress and newly created instances of `WandbLogger` will reuse this run. If this is not desired, call `wandb.finish()` before instantiating `WandbLogger`.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 248 K  | train
+2 | leaky_linears    | ModuleList | 0      | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 129    | train
+--------------------------------------------------------
+248 K     Trainable params
+0         Non-trainable params
+248 K     Total params
+0.995     Total estimated model params size (MB)
+40        Modules in train mode
+0         Modules in eval mode
+wandb: WARNING Config item 'num_hidden_layers' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'num_hidden' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'beta' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'optimizer_class' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'lr' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'batch_size' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'dropout' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'temporal_skip' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'layer_skip' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'use_bntt' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'scheduler_class' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'use_layernorm' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'neuron_type' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'scheduler_kwargs' was locked by 'sweep' (ignored update).
+wandb: WARNING Config item 'bntt_time_steps' was locked by 'sweep' (ignored update).
+SLURM auto-requeueing enabled. Setting signal handlers.
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/loops/fit_loop.py:310: The number of training batches (7) is smaller than the logging interval Trainer(log_every_n_steps=50). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
+slurmstepd: error: *** JOB 2233047 ON uc3n046 CANCELLED AT 2025-11-24T11:32:16 ***

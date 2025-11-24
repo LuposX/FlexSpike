@@ -1,0 +1,106 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+2025-11-11 16:26:57,567 INFO: Loading dataset from ./data/dataset.ds
+2025-11-11 16:26:57,759 INFO: Using accelerator=cpu
+2025-11-11 16:26:57,759 INFO: === Starting run 1/4 with seed 42 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run gats05gm
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251111_162658-gats05gm
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run SLSTM_4L_run1
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/gats05gm
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 118 K  | train
+2 | temp_skip_projs  | ModuleList | 0      | train
+3 | layer_skip_projs | ModuleList | 0      | train
+4 | layer_bntt       | ModuleList | 0      | train
+5 | layer_norms      | ModuleList | 512    | train
+6 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+119 K     Trainable params
+0         Non-trainable params
+119 K     Total params
+0.476     Total estimated model params size (MB)
+23        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.167
+Metric val_loss improved by 0.004 >= min_delta = 0.0001. New best score: 0.163
+Monitored metric val_loss did not improve in the last 20 records. Best score: 0.163. Signaling Trainer to stop.
+wandb: uploading artifact model-gats05gm; updating run metadata
+wandb: uploading artifact model-gats05gm
+wandb: 
+wandb: Run history:
+wandb:                    epoch ▁▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▅▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇████
+wandb:    grad_mean/layer_norms █▂▁▂▂▁▁▁▂▁▁
+wandb:   grad_mean/lif_layers.0 █▁▁▁▂▁▁▁▁▁▁
+wandb:   grad_mean/lif_layers.1 █▂▁▂▂▁▁▁▂▁▁
+wandb:   grad_mean/lif_layers.2 █▂▂▂▄▂▁▁▃▁▂
+wandb:   grad_mean/lif_layers.3 █▃▂▂▄▂▁▁▄▁▂
+wandb:   grad_mean/output_layer █▃▂▂▅▂▁▁▅▁▂
+wandb:                       lr █████▇▇▇▇▇▆▆▆▅▅▄▄▃▃▂▂▁
+wandb: spikes/train_avg_layer_0 █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: spikes/train_avg_layer_1 ▁█████████████████████
+wandb:                       +5 ...
+wandb: 
+wandb: Run summary:
+wandb:                    epoch 21
+wandb:    grad_mean/layer_norms 0.03491
+wandb:   grad_mean/lif_layers.0 2.21059
+wandb:   grad_mean/lif_layers.1 0.0574
+wandb:   grad_mean/lif_layers.2 0.00783
+wandb:   grad_mean/lif_layers.3 0.00111
+wandb:   grad_mean/output_layer 0.00662
+wandb:                       lr 0.00443
+wandb: spikes/train_avg_layer_0 -0.00083
+wandb: spikes/train_avg_layer_1 0.00168
+wandb:                       +5 ...
+wandb: 
+wandb: 🚀 View run SLSTM_4L_run1 at: https://wandb.ai/lupos/surrogate-confidence/runs/gats05gm
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251111_162658-gats05gm/logs
+2025-11-11 16:42:08,036 INFO: Run 1 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/SLSTM_4L-runrun_idx=0-epoch=20-val_loss=0.16.ckpt
+2025-11-11 16:42:08,036 INFO: === Starting run 2/4 with seed 43 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run o4h6o3fm
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251111_164208-o4h6o3fm
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run SLSTM_4L_run2
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/o4h6o3fm
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 118 K  | train
+2 | temp_skip_projs  | ModuleList | 0      | train
+3 | layer_skip_projs | ModuleList | 0      | train
+4 | layer_bntt       | ModuleList | 0      | train
+5 | layer_norms      | ModuleList | 512    | train
+6 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+119 K     Trainable params
+0         Non-trainable params
+119 K     Total params
+0.476     Total estimated model params size (MB)
+23        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.173
+slurmstepd: error: *** JOB 2094527 ON uc3n004 CANCELLED AT 2025-11-11T16:43:09 ***

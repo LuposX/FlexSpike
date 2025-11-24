@@ -1,0 +1,76 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+2025-11-12 16:52:20,006 INFO: Loading dataset from ./data/dataset.ds
+2025-11-12 16:52:20,053 INFO: Using accelerator=cpu
+2025-11-12 16:52:20,053 INFO: === Starting run 1/1 with seed 42 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run eornngu1
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_165220-eornngu1
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_RLeaky_run1
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/eornngu1
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 16.6 K | train
+2 | leaky_linears    | ModuleList | 13.0 K | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+29.7 K    Trainable params
+0         Non-trainable params
+29.7 K    Total params
+0.119     Total estimated model params size (MB)
+24        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.184
+Metric val_loss improved by 0.020 >= min_delta = 0.0001. New best score: 0.164
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.162
+Metric val_loss improved by 0.004 >= min_delta = 0.0001. New best score: 0.158
+Monitored metric val_loss did not improve in the last 20 records. Best score: 0.158. Signaling Trainer to stop.
+wandb: uploading artifact model-eornngu1
+wandb: 
+wandb: Run history:
+wandb:                    epoch ▁▁▁▂▂▂▂▃▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▆▇▇▇▇▇███
+wandb:  grad_mean/leaky_linears ▁▁▁▁▁█▃▁▁▁▁▁
+wandb:   grad_mean/lif_layers.0 ▁▁▁▁▁█▂▁▁▁▁▁
+wandb:   grad_mean/lif_layers.1 ▁▁▁▁▁▁█▁▁▆▁▃
+wandb:   grad_mean/lif_layers.2 ▆▃▄▄▃▁▃▄▃█▁▁
+wandb:   grad_mean/lif_layers.3 ▇▂▇▆▄▂▂▅▂█▁▁
+wandb:   grad_mean/output_layer █▂▄▁▂▂▂▂▂▃▃▃
+wandb:                       lr ██████▇▇▇▇▆▆▆▆▅▅▄▄▃▃▃▂▂▁
+wandb: spikes/train_avg_layer_0 ▁▇████▇▇▇█▇▇▆▅▅▅▅▅▅▅▅▅▅▅
+wandb: spikes/train_avg_layer_1 ▁▇▇████▆▆▆▆▅▃▃▄▄▄▄▄▄▅▅▅▅
+wandb:                       +5 ...
+wandb: 
+wandb: Run summary:
+wandb:                    epoch 23
+wandb:  grad_mean/leaky_linears 8.43827
+wandb:   grad_mean/lif_layers.0 19.90149
+wandb:   grad_mean/lif_layers.1 8.43838
+wandb:   grad_mean/lif_layers.2 0.00378
+wandb:   grad_mean/lif_layers.3 0.00081
+wandb:   grad_mean/output_layer 0.02187
+wandb:                       lr 0.00397
+wandb: spikes/train_avg_layer_0 0.37144
+wandb: spikes/train_avg_layer_1 0.52397
+wandb:                       +5 ...
+wandb: 
+wandb: 🚀 View run RSNN_RLeaky_run1 at: https://wandb.ai/lupos/surrogate-confidence/runs/eornngu1
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_165220-eornngu1/logs
+2025-11-12 16:59:43,152 INFO: Run 1 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_RLeaky-runrun_idx=0-epoch=03-val_loss=0.16.ckpt

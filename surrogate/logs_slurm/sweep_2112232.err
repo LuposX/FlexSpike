@@ -1,0 +1,318 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+2025-11-12 17:35:33,166 INFO: Loading dataset from ./data/dataset.ds
+2025-11-12 17:35:33,360 INFO: Using accelerator=cpu
+2025-11-12 17:35:33,361 INFO: === Starting run 1/4 with seed 42 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run l5g88uoa
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_173533-l5g88uoa
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_Leaky_wLayNorm_run1
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/l5g88uoa
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 0      | train
+2 | leaky_linears    | ModuleList | 13.0 K | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 512    | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+13.6 K    Trainable params
+0         Non-trainable params
+13.6 K    Total params
+0.054     Total estimated model params size (MB)
+24        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.133
+Metric val_loss improved by 0.007 >= min_delta = 0.0001. New best score: 0.126
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Monitored metric val_loss did not improve in the last 20 records. Best score: 0.123. Signaling Trainer to stop.
+wandb: uploading artifact model-l5g88uoa; updating run metadata
+wandb: uploading artifact model-l5g88uoa
+wandb: uploading history steps 192-195, summary, console lines 20-21
+wandb: 
+wandb: Run history:
+wandb:                     epoch ▁▂▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇▇▇█
+wandb:   grad_mean/layer_norms.0 █▃▄▃▂▂▂▂▂▂▁▁▂▁▃▁▂▁▂▁▁▁▁▁▂▁▁▂▁▂▁▁▁▁▁▁▁▁▂▁
+wandb:   grad_mean/layer_norms.1 █▄▃▂▂▂▂▂▂▁▂▁▁▂▂▂▁▂▁▁▁▁▁▁▂▂▁▂▁▂▁▂▁▁▂▁▁▁▂▁
+wandb:   grad_mean/layer_norms.2 █▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.3 █▇▂▂▂▂▂▁▂▂▁▂▁▂▂▂▂▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.0 █▄▃▂▂▂▂▂▂▂▂▃▁▂▁▂▂▃▁▁▁▂▁▂▁▁▁▁▁▃▁▂▂▁▁▁▂▁▂▁
+wandb: grad_mean/leaky_linears.1 █▃▃▂▂▂▁▁▂▂▂▁▂▁▁▂▂▂▁▁▂▂▁▁▁▂▁▁▁▂▁▂▂▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.2 █▂▂▂▂▂▂▁▂▁▁▂▁▂▂▁▁▁▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.3 █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:    grad_mean/output_layer █▃▆▃▂▁▂▂▂▂▄▂▂▃▂▂▃▁▁▂▂▂▂▂▂▁▂▁▁▁▁▁▃▂▂▂▁▁▁▁
+wandb:                        +8 ...
+wandb: 
+wandb: Run summary:
+wandb:                     epoch 55
+wandb:   grad_mean/layer_norms.0 0.00459
+wandb:   grad_mean/layer_norms.1 0.00058
+wandb:   grad_mean/layer_norms.2 0.0001
+wandb:   grad_mean/layer_norms.3 3e-05
+wandb: grad_mean/leaky_linears.0 0.01484
+wandb: grad_mean/leaky_linears.1 0.00124
+wandb: grad_mean/leaky_linears.2 0.00027
+wandb: grad_mean/leaky_linears.3 5e-05
+wandb:    grad_mean/output_layer 0.00404
+wandb:                        +8 ...
+wandb: 
+wandb: 🚀 View run RSNN_Leaky_wLayNorm_run1 at: https://wandb.ai/lupos/surrogate-confidence/runs/l5g88uoa
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_173533-l5g88uoa/logs
+2025-11-12 17:46:18,962 INFO: Run 1 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_Leaky_wLayNorm-runrun_idx=0-epoch=54-val_loss=0.12-v1.ckpt
+2025-11-12 17:46:18,962 INFO: === Starting run 2/4 with seed 43 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run vzoq93om
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_174618-vzoq93om
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_Leaky_wLayNorm_run2
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/vzoq93om
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 0      | train
+2 | leaky_linears    | ModuleList | 13.0 K | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 512    | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+13.6 K    Trainable params
+0         Non-trainable params
+13.6 K    Total params
+0.054     Total estimated model params size (MB)
+24        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.139
+Metric val_loss improved by 0.012 >= min_delta = 0.0001. New best score: 0.127
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Monitored metric val_loss did not improve in the last 20 records. Best score: 0.123. Signaling Trainer to stop.
+wandb: uploading artifact model-vzoq93om; updating run metadata
+wandb: uploading artifact model-vzoq93om
+wandb: uploading history steps 221-223, summary, console lines 20-21
+wandb: 
+wandb: Run history:
+wandb:                     epoch ▁▁▁▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇█████
+wandb:   grad_mean/layer_norms.0 █▂▂▂▂▁▂▁▁▁▂▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.1 █▆▃▂▃▂▃▁▂▂▂▂▁▁▂▁▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.2 █▇▄▄▂▂▂▁▁▂▂▂▂▂▁▁▂▁▂▁▁▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.3 █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.0 █▄▃▂▃▄▂▃▃▃▂▁▁▄▁▁▂▂▁▃▁▂▂▂▁▂▁▂▁▂▂▂▁▂▂▁▁▂▁▁
+wandb: grad_mean/leaky_linears.1 █▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.2 █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.3 █▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:    grad_mean/output_layer █▄▃▅▂▁▂▂▂▂▃▂▂▁▃▂▁▂▂▂▂▁▂▂▃▁▁▁▂▁▁▁▂▁▂▁▁▁▁▂
+wandb:                        +8 ...
+wandb: 
+wandb: Run summary:
+wandb:                     epoch 63
+wandb:   grad_mean/layer_norms.0 0.00701
+wandb:   grad_mean/layer_norms.1 0.00072
+wandb:   grad_mean/layer_norms.2 0.00018
+wandb:   grad_mean/layer_norms.3 4e-05
+wandb: grad_mean/leaky_linears.0 0.02342
+wandb: grad_mean/leaky_linears.1 0.00187
+wandb: grad_mean/leaky_linears.2 0.00043
+wandb: grad_mean/leaky_linears.3 9e-05
+wandb:    grad_mean/output_layer 0.00334
+wandb:                        +8 ...
+wandb: 
+wandb: 🚀 View run RSNN_Leaky_wLayNorm_run2 at: https://wandb.ai/lupos/surrogate-confidence/runs/vzoq93om
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_174618-vzoq93om/logs
+2025-11-12 17:58:09,996 INFO: Run 2 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_Leaky_wLayNorm-runrun_idx=0-epoch=56-val_loss=0.12.ckpt
+2025-11-12 17:58:09,997 INFO: === Starting run 3/4 with seed 44 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run 21psorsp
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_175810-21psorsp
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_Leaky_wLayNorm_run3
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/21psorsp
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 0      | train
+2 | leaky_linears    | ModuleList | 13.0 K | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 512    | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+13.6 K    Trainable params
+0         Non-trainable params
+13.6 K    Total params
+0.054     Total estimated model params size (MB)
+24        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.147
+Metric val_loss improved by 0.019 >= min_delta = 0.0001. New best score: 0.128
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.126
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+`Trainer.fit` stopped: `max_epochs=80` reached.
+wandb: uploading artifact model-21psorsp
+wandb: 
+wandb: Run history:
+wandb:                     epoch ▁▁▁▁▂▂▂▂▃▃▃▃▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇█████
+wandb:   grad_mean/layer_norms.0 █▃▆▅▂▂▂▁▂▄▅▄▃▁▂▂▁▁▂▂▁▁▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.1 █▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.2 █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.3 █▅▃▂▃▃▂▂▂▂▃▃▂▁▂▁▂▂▁▂▂▂▁▁▂▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.0 ▇█▇▄▄▃▃▆▅▁▂▁▃▂▂▁▂▂▂▁▃▂▂▂▂▂▁▁▁▃▁▁▂▂▁▁▁▁▂▁
+wandb: grad_mean/leaky_linears.1 █▇▆▆▃▂▂▄▄▄▂▂▂▂▁▂▂▂▁▂▂▁▁▂▂▁▂▂▃▁▂▂▁▁▂▁▁▁▁▂
+wandb: grad_mean/leaky_linears.2 █▆▅▄▃▆▂▂▄▃▃▂▂▂▃▂▂▂▂▂▂▃▁▂▁▁▂▂▂▂▂▁▁▁▁▃▁▁▁▁
+wandb: grad_mean/leaky_linears.3 █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:    grad_mean/output_layer ▆▄▄▁█▃▂▄▄▃▅▁▃▃▃▁▁▃▂▃▄▂▅▂▁▃▂▃▄▄▂▄▄▂▃▂▁▁▁▁
+wandb:                        +8 ...
+wandb: 
+wandb: Run summary:
+wandb:                     epoch 79
+wandb:   grad_mean/layer_norms.0 0.00597
+wandb:   grad_mean/layer_norms.1 0.00103
+wandb:   grad_mean/layer_norms.2 0.00022
+wandb:   grad_mean/layer_norms.3 4e-05
+wandb: grad_mean/leaky_linears.0 0.01922
+wandb: grad_mean/leaky_linears.1 0.00218
+wandb: grad_mean/leaky_linears.2 0.00055
+wandb: grad_mean/leaky_linears.3 0.0001
+wandb:    grad_mean/output_layer 0.00049
+wandb:                        +8 ...
+wandb: 
+wandb: 🚀 View run RSNN_Leaky_wLayNorm_run3 at: https://wandb.ai/lupos/surrogate-confidence/runs/21psorsp
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_175810-21psorsp/logs
+2025-11-12 18:13:00,105 INFO: Run 3 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_Leaky_wLayNorm-runrun_idx=0-epoch=75-val_loss=0.12.ckpt
+2025-11-12 18:13:00,105 INFO: === Starting run 4/4 with seed 45 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run stvhcwo9
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_181300-stvhcwo9
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_Leaky_wLayNorm_run4
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/stvhcwo9
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 0      | train
+2 | leaky_linears    | ModuleList | 13.0 K | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 512    | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+13.6 K    Trainable params
+0         Non-trainable params
+13.6 K    Total params
+0.054     Total estimated model params size (MB)
+24        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.141
+Metric val_loss improved by 0.012 >= min_delta = 0.0001. New best score: 0.129
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.126
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.124
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.123
+Monitored metric val_loss did not improve in the last 20 records. Best score: 0.123. Signaling Trainer to stop.
+wandb: updating run metadata
+wandb: 
+wandb: Run history:
+wandb:                     epoch ▁▁▂▂▂▂▂▂▂▂▂▃▃▃▃▃▃▃▃▃▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇███
+wandb:   grad_mean/layer_norms.0 █▄▃▃▁▂▂▁▂▂▂▂▂▃▃▂▂▂▁▂▁▂▁▃▁▂▂▁▁▂▁▁▂▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.1 █▄▂▂▂▂▂▂▃▂▁▂▁▂▂▁▂▂▁▁▂▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.2 █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   grad_mean/layer_norms.3 █▂▁▂▂▂▂▃▂▁▁▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.0 █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.1 █▂▂▁▂▁▁▂▁▂▂▁▁▁▁▁▁▂▁▁▂▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/leaky_linears.2 █▆▅▂▂▁▂▃▂▁▂▂▂▂▁▁▁▂▂▂▂▂▂▁▁▁▁▁▂▂▂▁▁▁▂▂▁▁▁▁
+wandb: grad_mean/leaky_linears.3 █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:    grad_mean/output_layer ▄▄▂▃▃▃█▃▅▁▂▃▃▂▁▂▂▂▂▃▁▂▂▃▁▁▁▁▂▃▁▂▂▁▁▂▂▁▂▁
+wandb:                        +8 ...
+wandb: 
+wandb: Run summary:
+wandb:                     epoch 69
+wandb:   grad_mean/layer_norms.0 0.00968
+wandb:   grad_mean/layer_norms.1 0.00105
+wandb:   grad_mean/layer_norms.2 0.00017
+wandb:   grad_mean/layer_norms.3 5e-05
+wandb: grad_mean/leaky_linears.0 0.03478
+wandb: grad_mean/leaky_linears.1 0.00258
+wandb: grad_mean/leaky_linears.2 0.00039
+wandb: grad_mean/leaky_linears.3 0.0001
+wandb:    grad_mean/output_layer 0.00115
+wandb:                        +8 ...
+wandb: 
+wandb: 🚀 View run RSNN_Leaky_wLayNorm_run4 at: https://wandb.ai/lupos/surrogate-confidence/runs/stvhcwo9
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251112_181300-stvhcwo9/logs
+2025-11-12 18:26:03,182 INFO: Run 4 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_Leaky_wLayNorm-runrun_idx=0-epoch=75-val_loss=0.12.ckpt

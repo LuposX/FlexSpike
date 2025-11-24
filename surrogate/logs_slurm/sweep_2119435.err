@@ -1,0 +1,411 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+2025-11-13 14:28:02,430 INFO: Loading dataset from ./data/dataset.ds
+2025-11-13 14:28:02,608 INFO: Using accelerator=cpu
+2025-11-13 14:28:02,608 INFO: === Starting run 1/4 with seed 42 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run fe250ue2
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_142802-fe250ue2
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_wHypOpt_8L_run1
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/fe250ue2
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 62.9 K | train
+2 | leaky_linears    | ModuleList | 0      | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+30.2 K    Trainable params
+32.8 K    Non-trainable params
+63.0 K    Total params
+0.252     Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.153
+Metric val_loss improved by 0.009 >= min_delta = 0.0001. New best score: 0.144
+Metric val_loss improved by 0.014 >= min_delta = 0.0001. New best score: 0.130
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.127
+Metric val_loss improved by 0.007 >= min_delta = 0.0001. New best score: 0.121
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.117
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.116
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.105
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.105
+`Trainer.fit` stopped: `max_epochs=80` reached.
+wandb: uploading artifact model-fe250ue2; updating run metadata
+wandb: uploading artifact model-fe250ue2
+wandb: 
+wandb: Run history:
+wandb:                  epoch ▁▁▂▂▂▂▂▃▃▃▄▄▄▄▄▄▄▄▄▅▅▅▆▆▆▆▆▆▆▇▇▇▇▇▇▇████
+wandb: grad_mean/lif_layers.0 ▂▂█▄▄▂▂▄▂▂▃▂▂▁▂▂▂▂▁▃▁▁▁▂▂▂▂▂▁▁▂▂▂▁▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.1 ▂▁▅█▂▂▂▂▄▁▂▁▂▁▂▁▁▁▁▁▁▁▁▁▁▂▂▂▁▂▄▂▁▁▂▂▁▂▁▁
+wandb: grad_mean/lif_layers.2 ▁▅█▄▂▁▂▂▂▂▁▂▂▁▁▁▁▁▁▁▃▁▆▁▂▁▂▁▁▁▁▁▂▂▂▁▁▁▁▁
+wandb: grad_mean/lif_layers.3 ▂▁▁▃█▆▁▁▁▁▁▁▂▁▁▁▁▂▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▂▁▁▁▁▁
+wandb: grad_mean/lif_layers.4 ▂▄█▅▅▂▂▂▂▃▁▁▁▂▁▁▁▂▁▁▃▂▁▁▂▂▁▁▁▁▁▁▁▂▁▂▁▁▁▁
+wandb: grad_mean/lif_layers.5 ▄▃▃▇█▇▇▂▃▇▃▂▂▁▂▂▂▂▁▂▂▃▁▁▂▂▂▃▂▁▂▁▂▁▁▁▁▁▁▂
+wandb: grad_mean/lif_layers.6 ▂▂▃█▂▂▃▂▃▃▁▂▆▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.7 ▄▃▂█▂▂▂▄█▁▁▄▃▂▅▁▂▂▂▂▂▂▁▂▂▂▂▁▂▂▁▁▁▂▂▁▁▁▁▁
+wandb: grad_mean/output_layer ▂▁▁█▁▂▂▅▁▁▁▁▁▃▂▁▁▂▁▁▂▁▁▂▂▂▁▂▁▁▂▂▁▁▁▁▁▁▁▁
+wandb:                    +12 ...
+wandb: 
+wandb: Run summary:
+wandb:                  epoch 79
+wandb: grad_mean/lif_layers.0 7e-05
+wandb: grad_mean/lif_layers.1 3e-05
+wandb: grad_mean/lif_layers.2 2e-05
+wandb: grad_mean/lif_layers.3 2e-05
+wandb: grad_mean/lif_layers.4 3e-05
+wandb: grad_mean/lif_layers.5 4e-05
+wandb: grad_mean/lif_layers.6 5e-05
+wandb: grad_mean/lif_layers.7 6e-05
+wandb: grad_mean/output_layer 0.00211
+wandb:                    +12 ...
+wandb: 
+wandb: 🚀 View run RSNN_wHypOpt_8L_run1 at: https://wandb.ai/lupos/surrogate-confidence/runs/fe250ue2
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_142802-fe250ue2/logs
+2025-11-13 15:06:43,474 INFO: Run 1 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_wHypOpt_8L-runrun_idx=0-epoch=79-val_loss=0.11.ckpt
+2025-11-13 15:06:43,474 INFO: === Starting run 2/4 with seed 43 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run vmgtsrhk
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_150643-vmgtsrhk
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_wHypOpt_8L_run2
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/vmgtsrhk
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 62.9 K | train
+2 | leaky_linears    | ModuleList | 0      | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+30.2 K    Trainable params
+32.8 K    Non-trainable params
+63.0 K    Total params
+0.252     Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.156
+Metric val_loss improved by 0.009 >= min_delta = 0.0001. New best score: 0.148
+Metric val_loss improved by 0.012 >= min_delta = 0.0001. New best score: 0.135
+Metric val_loss improved by 0.008 >= min_delta = 0.0001. New best score: 0.128
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.122
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.122
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.120
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.119
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.116
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.105
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.103
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.100
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.100
+`Trainer.fit` stopped: `max_epochs=80` reached.
+wandb: uploading artifact model-vmgtsrhk; updating run metadata
+wandb: uploading artifact model-vmgtsrhk
+wandb: uploading history steps 277-279, summary, console lines 61-61
+wandb: 
+wandb: Run history:
+wandb:                  epoch ▁▁▂▂▂▂▂▃▃▃▃▃▃▃▃▄▄▄▄▄▄▄▄▅▅▅▅▆▆▆▆▇▇▇▇▇▇███
+wandb: grad_mean/lif_layers.0 ▁▁▁▂▃▂▃▂▄▂▂▂▂▁▁▁▁▂▂▁▂▁▁▃▅▁▃▂▂▅▄▃▂▂▂▂█▅▃▂
+wandb: grad_mean/lif_layers.1 ▂▂▅▆▂▃▃▂▂▂▃▁▂▂▁▁▂▁▂▃▁▁▃▂▂▅██▂▃▂▅█▄▄▆▆▄▂▂
+wandb: grad_mean/lif_layers.2 ▁▂▂▇▃▃▄█▄▂▃▁▂▂▁▁▂▁▁▃▂▂▁▅▃▄▂▂▂█▂▂▁▃▃▂▄▂▁▂
+wandb: grad_mean/lif_layers.3 ▁▂▆█▃▃▃▁▂▁▅▂▁▁▁▁▂▁▂▂▁▁▁▄▃▄▂▂▂▃▂▂▂▂▁▂▂▁▂▁
+wandb: grad_mean/lif_layers.4 ▃▅▆▄▇▃▄▅▆▃▁▂▃▂▅▆▂▂▂▃▂▂▂▂▂▃▆▂▅█▆▂▃▃▁▄▃▃▄▂
+wandb: grad_mean/lif_layers.5 ▁▃▃▃▆▃█▃▂▂▁▁▃▂▂▂▃▂▂▁▁▂▁▁▂▃▂▁▅▂▁▂▂▁▁▃▂▂▂▁
+wandb: grad_mean/lif_layers.6 ▄▂▅▆▆▃█▅▂▂▂▁▁▂▂▂▂▁▁▁▁▁▂▁▂▅▃▂▁▂▁▂▂▂▁▁▁▂▁▁
+wandb: grad_mean/lif_layers.7 ▂█▂▄▂▂▃▁▁▂▁▂▁▁▁▁▁▁▂▂▁▁▁▁▁▁▃▂▂▁▁▂▁▁▁▁▁▁▁▁
+wandb: grad_mean/output_layer ▂█▁▃▄▃▁▃▃▂▂▁▂▂▂▂▃▄▃▂▂▃▁▅▃▃▂▁▂▁▁▁▁▁▁▁▁▁▁▁
+wandb:                    +12 ...
+wandb: 
+wandb: Run summary:
+wandb:                  epoch 79
+wandb: grad_mean/lif_layers.0 0.0002
+wandb: grad_mean/lif_layers.1 0.0001
+wandb: grad_mean/lif_layers.2 7e-05
+wandb: grad_mean/lif_layers.3 9e-05
+wandb: grad_mean/lif_layers.4 6e-05
+wandb: grad_mean/lif_layers.5 7e-05
+wandb: grad_mean/lif_layers.6 8e-05
+wandb: grad_mean/lif_layers.7 0.0001
+wandb: grad_mean/output_layer 0.00104
+wandb:                    +12 ...
+wandb: 
+wandb: 🚀 View run RSNN_wHypOpt_8L_run2 at: https://wandb.ai/lupos/surrogate-confidence/runs/vmgtsrhk
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_150643-vmgtsrhk/logs
+2025-11-13 15:44:53,284 INFO: Run 2 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_wHypOpt_8L-runrun_idx=0-epoch=72-val_loss=0.10.ckpt
+2025-11-13 15:44:53,285 INFO: === Starting run 3/4 with seed 44 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run o49nrnny
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_154453-o49nrnny
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_wHypOpt_8L_run3
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/o49nrnny
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 62.9 K | train
+2 | leaky_linears    | ModuleList | 0      | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+30.2 K    Trainable params
+32.8 K    Non-trainable params
+63.0 K    Total params
+0.252     Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.156
+Metric val_loss improved by 0.021 >= min_delta = 0.0001. New best score: 0.135
+Metric val_loss improved by 0.005 >= min_delta = 0.0001. New best score: 0.130
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.127
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.125
+Metric val_loss improved by 0.007 >= min_delta = 0.0001. New best score: 0.118
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.117
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.116
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.105
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.103
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+`Trainer.fit` stopped: `max_epochs=80` reached.
+wandb: updating run metadata
+wandb: 
+wandb: Run history:
+wandb:                  epoch ▁▁▁▁▁▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▅▆▆▇▇▇▇▇█████
+wandb: grad_mean/lif_layers.0 ▂▂▃▅▂▂▂▂▁▂▂▁▂▂▂▄█▁▁▁▁▂▂▂▇▁▄▂▂▁▂▂▁▂▂▂▃▂▂▂
+wandb: grad_mean/lif_layers.1 ▄▂▂▂▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▃█▁▁▃▁▂▂▁▁▂▂▁▂▁▂▁▂▁▁
+wandb: grad_mean/lif_layers.2 ▄▂▄▂▂▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁█▁▃▁▂▁▁▁▁▁▁▁▂▁▁▁▁▁
+wandb: grad_mean/lif_layers.3 ▂█▁▂▅▂▁▁▂▁▁▃▁▁▂▂▁▁▂▄▁▁▁▁▁▁▁▂▁▁▂▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.4 ▅▁▂▆▆▁▂▂▁▁▁▂▃▁▁▂▁▁▃▁▁▁▁▁▁▁█▁▁▂▂▂▁▂▂▁▁▁▁▁
+wandb: grad_mean/lif_layers.5 ▃█▂▂▂▂▂▁▁▁▁▁▁▂▁▄▃▁▁▁▁▁▁▃▁▁▂▁▁▂▂▂▁▁▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.6 █▆▃▃▃▁▁▂▁▂▂▂▁▁▂▁▁▁▁▁▁▁▃▁▁▁▁▁▂▁▂▂▁▁▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.7 █▅▃▂▇▃▂▂▃▃▂▁▃▃▂▂▁▂▁▁▁▁▁▁▂▁▁▂▁▁▂▁▁▁▁▁▁▁▁▁
+wandb: grad_mean/output_layer ▂▇█▃▄▃▁▂▄▂▁▂▂▂▂▁▃▄▁▁▅▂▁▁▁▁▁▁▃▂▂▁▂▂▁▁▁▁▁▁
+wandb:                    +12 ...
+wandb: 
+wandb: Run summary:
+wandb:                  epoch 79
+wandb: grad_mean/lif_layers.0 0.00015
+wandb: grad_mean/lif_layers.1 8e-05
+wandb: grad_mean/lif_layers.2 7e-05
+wandb: grad_mean/lif_layers.3 5e-05
+wandb: grad_mean/lif_layers.4 6e-05
+wandb: grad_mean/lif_layers.5 6e-05
+wandb: grad_mean/lif_layers.6 6e-05
+wandb: grad_mean/lif_layers.7 6e-05
+wandb: grad_mean/output_layer 0.00097
+wandb:                    +12 ...
+wandb: 
+wandb: 🚀 View run RSNN_wHypOpt_8L_run3 at: https://wandb.ai/lupos/surrogate-confidence/runs/o49nrnny
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_154453-o49nrnny/logs
+2025-11-13 16:22:39,358 INFO: Run 3 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_wHypOpt_8L-runrun_idx=0-epoch=72-val_loss=0.10.ckpt
+2025-11-13 16:22:39,358 INFO: === Starting run 4/4 with seed 45 ===
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: setting up run m8zp50yj
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_162239-m8zp50yj
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run RSNN_wHypOpt_8L_run4
+wandb: ⭐️ View project at https://wandb.ai/lupos/surrogate-confidence
+wandb: 🚀 View run at https://wandb.ai/lupos/surrogate-confidence/runs/m8zp50yj
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:751: Checkpoint directory /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN exists and is not empty.
+
+  | Name             | Type       | Params | Mode 
+--------------------------------------------------------
+0 | norm             | LayerNorm  | 14     | train
+1 | lif_layers       | ModuleList | 62.9 K | train
+2 | leaky_linears    | ModuleList | 0      | train
+3 | temp_skip_projs  | ModuleList | 0      | train
+4 | layer_skip_projs | ModuleList | 0      | train
+5 | layer_bntt       | ModuleList | 0      | train
+6 | layer_norms      | ModuleList | 0      | train
+7 | output_layer     | Linear     | 65     | train
+--------------------------------------------------------
+30.2 K    Trainable params
+32.8 K    Non-trainable params
+63.0 K    Total params
+0.252     Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val_loss improved. New best score: 0.150
+Metric val_loss improved by 0.007 >= min_delta = 0.0001. New best score: 0.144
+Metric val_loss improved by 0.013 >= min_delta = 0.0001. New best score: 0.131
+Metric val_loss improved by 0.009 >= min_delta = 0.0001. New best score: 0.122
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.119
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.118
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.117
+Metric val_loss improved by 0.003 >= min_delta = 0.0001. New best score: 0.114
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.113
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.112
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.111
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.110
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.109
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.108
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.107
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.106
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.105
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.105
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.104
+Metric val_loss improved by 0.002 >= min_delta = 0.0001. New best score: 0.103
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.001 >= min_delta = 0.0001. New best score: 0.102
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.101
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.100
+Metric val_loss improved by 0.000 >= min_delta = 0.0001. New best score: 0.100
+`Trainer.fit` stopped: `max_epochs=80` reached.
+wandb: updating run metadata
+wandb: 
+wandb: Run history:
+wandb:                  epoch ▁▁▁▁▁▂▂▂▂▂▃▃▃▃▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▆▆▇▇▇▇▇▇█
+wandb: grad_mean/lif_layers.0 ▁▂█▂▁▁▁▁▁▁▃▂▁▁▁▁▂▁▁▁▂▁▂▂▂▂▂▁▂▂▁▃▂▂▂▂▁▁▂▁
+wandb: grad_mean/lif_layers.1 ▂█▅▂▂▂▂▁▁▂▁▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▂▁▂▁▂▂▂▂▁▂▁▂▂▂
+wandb: grad_mean/lif_layers.2 ▂▂█▂▃▁▂▁▁▁▂▂▁▁▁▃▂▂▂▂▂▁▂▂▂▂▂▃▂▁▁▂▂▃▂▂▂▂▂▂
+wandb: grad_mean/lif_layers.3 ▁▂█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁
+wandb: grad_mean/lif_layers.4 ▅▂▄█▃▂▃▂▃▃▁▂▂▂▄▁▂▂▇▂▁▂▂▂▂▂▃▁▁▃▂▁▁▃▂▂▂▂▂▁
+wandb: grad_mean/lif_layers.5 ▆▂▄█▂▃▃▂▅▁▃▁▂▂▁▂▂▂▂▃▂▁▂▂▂▄▂▂▂▃▃▂▃▃▃▃▂▂▂▂
+wandb: grad_mean/lif_layers.6 ▆▅▃▅▂▅▃▄▁▄▃▆▃▂▄▂▃▃█▃▆▇▃▄▅▂▅▆▃▆▄▅▄▆▇▄▆▄▃▁
+wandb: grad_mean/lif_layers.7 ▅▃█▂▃▂▂▃▂▁▁▂▁▂▂▁▂▃▁▂▂▃▃▁▂▂▂▂▃▂▁▂▁▂▂▂▁▁▁▁
+wandb: grad_mean/output_layer ▄█▃▇▂▃▂▂▃▅▂▃▂▄▁▃▂▁▅▂▂▂▃▁▂▂▂▁▂▁▁▁▁▁▃▂▁▂▁▁
+wandb:                    +12 ...
+wandb: 
+wandb: Run summary:
+wandb:                  epoch 79
+wandb: grad_mean/lif_layers.0 0.00012
+wandb: grad_mean/lif_layers.1 5e-05
+wandb: grad_mean/lif_layers.2 6e-05
+wandb: grad_mean/lif_layers.3 6e-05
+wandb: grad_mean/lif_layers.4 5e-05
+wandb: grad_mean/lif_layers.5 8e-05
+wandb: grad_mean/lif_layers.6 6e-05
+wandb: grad_mean/lif_layers.7 8e-05
+wandb: grad_mean/output_layer 0.00043
+wandb:                    +12 ...
+wandb: 
+wandb: 🚀 View run RSNN_wHypOpt_8L_run4 at: https://wandb.ai/lupos/surrogate-confidence/runs/m8zp50yj
+wandb: ⭐️ View project at: https://wandb.ai/lupos/surrogate-confidence
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251113_162239-m8zp50yj/logs
+2025-11-13 17:00:38,742 INFO: Run 4 finished. Best checkpoint: /pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/models/SRNN/RSNN_wHypOpt_8L-runrun_idx=0-epoch=72-val_loss=0.10.ckpt

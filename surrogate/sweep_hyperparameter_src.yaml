@@ -66,4 +66,10 @@ parameters:
   relu_bypass:
     values: [True, False]
 
-run_cap: 100
+run_cap: 200
+
+early_terminate:
+  type: hyperband
+  s: 2
+  eta: 3
+  max_iter: 40
