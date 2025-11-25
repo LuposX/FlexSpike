@@ -205,6 +205,7 @@ def main(args):
             dropout=0, #args.dropout,
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
+            test_dataset=test_dataset,
             max_epochs=args.max_epochs,
             surrogate_gradient=surrogate,
             temporal_skip=args.temporal_skip,
@@ -240,6 +241,12 @@ def main(args):
 
         # Train
         trainer.fit(model)
+
+        logger.info("Starting test for run %d using best checkpoint", run_idx + 1)
+        trainer.test(
+            model=model,  # optional, will load checkpoint automatically if ckpt_path="best"
+            ckpt_path="best"
+        )
 
         # Finalize WandB logger
         if wandb_logger and not args.no_wandb:

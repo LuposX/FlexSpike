@@ -284,6 +284,7 @@ def training_run():
             neuron_type=config.neuron_type,
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
+            test_dataset=test_dataset,
             max_epochs=config.epochs,
             temporal_skip=config.temporal_skip,
             layer_skip=config.layer_skip,

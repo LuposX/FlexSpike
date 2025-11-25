@@ -10,7 +10,7 @@ import torch.nn as nn
 
 import re
 
-from utils.src_cell import SRC
+from .src_cell import SRC
 
 from typing import Callable, Union, Optional
 
@@ -38,6 +38,7 @@ class SpikeSynth(L.LightningModule):
                  bntt_time_steps=None,
                  train_dataset=None,
                  valid_dataset=None,
+                 test_dataset=None,
                  SRC_config: dict | None = None,
                  loss_fn: Union[str, Callable] = "mse",
                  loss_kwargs: Optional[dict] = None,
@@ -106,6 +107,9 @@ class SpikeSynth(L.LightningModule):
             valid_dataset (torch.utils.data.Dataset, optional): 
                 Dataset used for validation. Required by `val_dataloader()`.
 
+            test_dataset (torch.utils.data.Dataset, optional): 
+                Dataset used for testing. Required by `test_dataloader()`.
+
             scheduler_class (torch.optim.lr_scheduler):
                 What Learning Rate Scheduler should be used for training.
 
@@ -133,6 +137,7 @@ class SpikeSynth(L.LightningModule):
         self.num_outputs = self.num_inputs
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
+        self.test_dataset = test_dataset
         self.max_epochs = max_epochs
         self.surrogate_gradient = surrogate_gradient
         self.SRC_config = SRC_config
@@ -686,6 +691,45 @@ class SpikeSynth(L.LightningModule):
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
+    def test_step(self, batch, batch_idx):
+        X_batch, y_batch = batch
+        outputs = self(X_batch).detach()
+    
+        y_true = y_batch.float()
+    
+        # Mean Squared Error
+        mse = F.mse_loss(outputs, y_true)
+    
+        # Mean Absolute Error
+        mae = F.l1_loss(outputs, y_true)
+    
+        # R^2 score
+        ss_res = torch.sum((y_true - outputs) ** 2)
+        ss_tot = torch.sum((y_true - y_true.mean()) ** 2)
+        r2 = 1 - ss_res / (ss_tot + 1e-8)
+    
+        # Pearson correlation
+        p_mean = outputs.mean(dim=0, keepdim=True)
+        t_mean = y_true.mean(dim=0, keepdim=True)
+        numerator = torch.sum((outputs - p_mean) * (y_true - t_mean))
+        denominator = torch.sqrt(torch.sum((outputs - p_mean) ** 2) * torch.sum((y_true - t_mean) ** 2) + 1e-8)
+        pearson = numerator / denominator
+    
+        # Log metrics
+        self.log_dict({
+            "test_mse": mse,
+            "test_mae": mae,
+            "test_r2": r2,
+            "test_pearson": pearson
+        }, prog_bar=True, on_step=False, on_epoch=True)
+    
+        return {
+            "test_mse": mse,
+            "test_mae": mae,
+            "test_r2": r2,
+            "test_pearson": pearson
+        }
+
     def on_train_epoch_end(self):
         opt = self.optimizers()
         lr = opt.param_groups[0]["lr"]
@@ -725,6 +769,14 @@ class SpikeSynth(L.LightningModule):
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
             self.valid_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=4,
+        )
+
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.test_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=False,
             num_workers=4,
