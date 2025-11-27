@@ -7,9 +7,9 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 1e-6
-    max: 1e-3
+    max: 5e-2
   num_hidden:
-    values: [4, 16, 64, 128]
+    values: [4, 16, 64, 128, 256]
   beta:
     value: 0 # No effect for SRC instead chnage alpha
   surrogate_gradient:
@@ -23,7 +23,7 @@ parameters:
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
-    values: [2, 4, 8, 16]
+    values: [2, 4, 6, 8, 16]
   temporal_skip:
     value: -1
   use_bntt:
@@ -41,35 +41,39 @@ parameters:
   data_path:
     value: "./data/small_dataset.ds"
   epochs:
-    value: 40
+    value: 50
+  loss_fn:
+    value: "mse"
+  loss_kwargs:
+    value: ""
   # SRC-specific hyperparameters
   alpha:
-    values: [0.85, 0.9, 0.95]        # moderate integrator decay
+    value: 0.9
   rho:
-    values: [1.0, 2.0, 3.0]         # prevents tanh saturation
+    value: 3 
   r:
-    values: [2.0, 4.0]              # recurrence weight
+    value: 2
   rs:
-    values: [-5.0, -3.0]            # avoids dead spikes
+    value: -7
   z:
-    values: [0.0, 0.1, 0.2]
+    value: 0.0
   zhyp_s:
-    values: [0.8, 0.9, 1.0]
+    value: 0.9
   zdep_s:
-    values: [0.0, 0.1, 0.2]
+    value: 0.0
   bh_init:
-    values: [-6.0, -5.0]            # prevents spike collapse
+    values: [-6.0, -4.0, -2.0]            # prevents spike collapse
   bh_max:
-    values: [-4.0, -3.0]
+    value: -4.0
   detach_rec:
     values: [True, False]
   relu_bypass:
     values: [True, False]
 
-run_cap: 200
+run_cap: 100
 
 early_terminate:
   type: hyperband
-  s: 2
+  s: 3
   eta: 3
-  max_iter: 40
+  max_iter: 50
