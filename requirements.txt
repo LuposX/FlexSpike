@@ -9,5 +9,8 @@ tqdm
 ipywidgets
 seaborn
 lightning
+torchmetrics
 wandb
+scipy
+plotly
 snntorch

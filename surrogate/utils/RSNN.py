@@ -47,6 +47,7 @@ class SpikeSynth(L.LightningModule):
         Initializes the SpikeSynth model, a spiking neural network (SNN). 
         The model supports temporal and layer-wise skip connections,
         customizable surrogate gradients, and flexible optimizer/lr scheduling.
+        Not all options (e.g. LayerSkip, TempralSkip) work with all neuron types.
 
         Args:
             num_hidden_layers (int): 
@@ -142,10 +143,10 @@ class SpikeSynth(L.LightningModule):
         self.surrogate_gradient = surrogate_gradient
         self.SRC_config = SRC_config
 
-        self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset"])
+        self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset", "test_dataset"])
 
-        if neuron_type == "SLSTM" and dropout != 0:
-            raise ValueError("SLSTM doesn't support dropout.")
+        if dropout != 0:
+            raise ValueError("Dropout currently not supported.")
 
         # If user selected SRC but SRC implementation couldn't be imported, fail fast
         if neuron_type == "SRC" and SRC is None:
@@ -155,15 +156,13 @@ class SpikeSynth(L.LightningModule):
             )
 
         # If SRC was selected, some features are incompatible — check and fail early.
-        if neuron_type == "SRC":
+        if neuron_type == "SRC" or neuron_type == "SLSTM":
             if use_bntt:
-                raise ValueError("SRC neurons do not support BNTT (use_bntt=True).")
+                raise ValueError("Neuron Type does not support BNTT (use_bntt=True).")
             if use_layernorm:
-                raise ValueError("SRC neurons do not support LayerNorm (use_layernorm=True).")
+                raise ValueError("Neuron Type does not support LayerNorm (use_layernorm=True).")
             if temporal_skip != -1:
-                raise ValueError("SRC neurons do not support temporal skip connections (temporal_skip must be -1).")
-            if layer_skip > 0:
-                raise ValueError("SRC neurons do not support layer-skip connections (layer_skip must be 0).")
+                raise ValueError("Neuron Type does not support temporal skip connections (temporal_skip must be -1).")
 
         self.norm = nn.LayerNorm(self.num_inputs + self.num_params)
         self.lif_layers = nn.ModuleList()
@@ -280,24 +279,13 @@ class SpikeSynth(L.LightningModule):
 
             self.lif_layers.append(layer)
 
-            # For SRC we do not apply temporal or layer skips (already validated),
-            # so set identity / None placeholders for API compatibility.
-            if neuron_type == "SRC":
-                self.temp_skip_projs.append(nn.Identity())
-                self.layer_skip_projs.append(None)
-                self.layer_bntt.append(None)
-                self.layer_norms.append(None)
-                # advance input_size for next layer
-                input_size = self.hparams.num_hidden
-                continue
-
             if input_size != self.hparams.num_hidden and self.hparams.temporal_skip != -1:
-                self.temp_skip_projs.append(nn.Linear(input_size, self.hparams.num_hidden))
+                self.temp_skip_projs.append(nn.Identity())#nn.Linear(input_size, self.hparams.num_hidden))
             else:
                 self.temp_skip_projs.append(nn.Identity())
 
             if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
-                self.layer_skip_projs.append(nn.Linear(self.hparams.num_hidden, self.hparams.num_hidden))
+                self.layer_skip_projs.append(nn.Identity())#nn.Linear(self.hparams.num_hidden, self.hparams.num_hidden))
             else:
                 self.layer_skip_projs.append(None)
 
@@ -564,18 +552,40 @@ class SpikeSynth(L.LightningModule):
             for i, lif in enumerate(self.lif_layers):
                 input_seq = x_seq  # (T, B, F_in or F_hidden)
 
-                # For SRC we previously validated that temporal and layer skips
-                # are not requested, so we skip those steps here.
+                # --- temporal skip projection (sequence-level) ---
+                if skip_k == -1 or skip_k >= T:
+                    prev_proj = None
+                else:
+                    prev = torch.zeros_like(x_seq)
+                    prev[skip_k:] = x_seq[:-skip_k]
+                    prev_proj = self.temp_skip_projs[i](prev)
 
-                # Normalization & BNTT are also not applied for SRC in this
-                # integration, so we skip _norm_and_bntt.
+                if prev_proj is not None:
+                    input_seq = input_seq + prev_proj
 
-                # feed into SRC layer
+                # --- layer-wise skip (non-time-tracked): add previous layer's output seq if available
+                if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
+                    skip_layer_out = layer_outputs[i - self.hparams.layer_skip]
+                    if skip_layer_out is not None:
+                        if self.layer_skip_projs[i] is not None:
+                            skip_proj = self.layer_skip_projs[i](skip_layer_out)
+                        else:
+                            skip_proj = skip_layer_out
+                        input_seq = input_seq + skip_proj
+
+                # --- Now normalization & BNTT across the sequence BEFORE calling the SRC layer
+                input_seq = self._norm_and_bntt(i, input_seq, per_timestep=False)
+
+                # feed into SRC layer (expects full sequence)
                 lif_out, _states = lif(input_seq)  # lif_out: (T, B, F_hidden)
 
-                # record spikes
-                # lif_out is already the spike-like output (ReLU on h); use mean
-                self.spike_counts.append(lif_out.mean())
+                # record spikes (keep numeric mean similar to other branches)
+                # lif_out.mean() returns a tensor, convert to float for consistency
+                try:
+                    self.spike_counts.append(float(lif_out.mean().item()))
+                except Exception:
+                    # fallback: append raw tensor mean
+                    self.spike_counts.append(lif_out.mean())
 
                 # update x_seq for next layer
                 x_seq = lif_out
