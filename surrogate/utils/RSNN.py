@@ -47,6 +47,7 @@ class SpikeSynth(L.LightningModule):
         Initializes the SpikeSynth model, a spiking neural network (SNN). 
         The model supports temporal and layer-wise skip connections,
         customizable surrogate gradients, and flexible optimizer/lr scheduling.
+        Not all options (e.g. LayerSkip, TempralSkip) work with all neuron types.
 
         Args:
             num_hidden_layers (int): 
@@ -142,10 +143,10 @@ class SpikeSynth(L.LightningModule):
         self.surrogate_gradient = surrogate_gradient
         self.SRC_config = SRC_config
 
-        self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset"])
+        self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset", "test_dataset"])
 
-        if neuron_type == "SLSTM" and dropout != 0:
-            raise ValueError("SLSTM doesn't support dropout.")
+        if dropout != 0:
+            raise ValueError("Dropout currently not supported.")
 
         # If user selected SRC but SRC implementation couldn't be imported, fail fast
         if neuron_type == "SRC" and SRC is None:
@@ -155,15 +156,15 @@ class SpikeSynth(L.LightningModule):
             )
 
         # If SRC was selected, some features are incompatible — check and fail early.
-        if neuron_type == "SRC":
+        if neuron_type == "SRC" or neuron_type == "SLSTM":
             if use_bntt:
-                raise ValueError("SRC neurons do not support BNTT (use_bntt=True).")
+                raise ValueError("Neuron Type does not support BNTT (use_bntt=True).")
             if use_layernorm:
-                raise ValueError("SRC neurons do not support LayerNorm (use_layernorm=True).")
+                raise ValueError("Neuron Type does not support LayerNorm (use_layernorm=True).")
             if temporal_skip != -1:
-                raise ValueError("SRC neurons do not support temporal skip connections (temporal_skip must be -1).")
+                raise ValueError("Neuron Type does not support temporal skip connections (temporal_skip must be -1).")
             if layer_skip > 0:
-                raise ValueError("SRC neurons do not support layer-skip connections (layer_skip must be 0).")
+                raise ValueError("Neuron Type does not support layer-skip connections (layer_skip must be 0).")
 
         self.norm = nn.LayerNorm(self.num_inputs + self.num_params)
         self.lif_layers = nn.ModuleList()
