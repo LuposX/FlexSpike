@@ -159,8 +159,6 @@ class SpikeSynth(L.LightningModule):
         if neuron_type == "SRC" or neuron_type == "SLSTM":
             if use_bntt:
                 raise ValueError("Neuron Type does not support BNTT (use_bntt=True).")
-            if use_layernorm:
-                raise ValueError("Neuron Type does not support LayerNorm (use_layernorm=True).")
             if temporal_skip != -1:
                 raise ValueError("Neuron Type does not support temporal skip connections (temporal_skip must be -1).")
 
