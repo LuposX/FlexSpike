@@ -17,6 +17,10 @@ import numpy as np
 import random
 import ast
 import re
+import sys
+import copy
+import yaml
+import wandb
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -146,10 +150,11 @@ def main(args):
     os.makedirs(logging_directory, exist_ok=True)
     os.environ["WANDB_DIR"] = logging_directory
 
-    # Scheduler and optimizer parsing
+    # Parse some defaults (these may be overridden per-run if not sweeping)
     scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
     optimizer_class = get_optimizer_class(args.optimizer_class)
-    optimizer_kwargs = parse_optimizer_kwargs(args.optimizer_kwargs)
+    # optimizer_kwargs may be a string (from CLI) -> parse now; if sweep supplies dict, we'll use that instead
+    optimizer_kwargs_cli = parse_optimizer_kwargs(args.optimizer_kwargs)
     loss_kwargs = parse_optimizer_kwargs(args.loss_kwargs)
 
     # Checkpoint callback
@@ -165,10 +170,62 @@ def main(args):
     accelerator = "gpu" if torch.cuda.is_available() and args.use_gpu_if_available else "cpu"
     logger.info("Using accelerator=%s", accelerator)
 
-    # Run loop for multiple seeds
-    for run_idx in range(args.num_runs):
-        seed = args.base_seed + run_idx
-        logger.info("=== Starting run %d/%d with seed %d ===", run_idx + 1, args.num_runs, seed)
+    # Helper that runs a single run (seed)
+    def run_single_run(run_idx: int, config_override: Optional[Dict[str, Any]] = None):
+        # Make a shallow copy of args so per-run overrides don't leak
+        local_args = copy.deepcopy(vars(args))
+
+        # Convert config_override into a plain dict (if given)
+        config_dict = None
+        if config_override:
+            # If it's already a dict, use it directly
+            if isinstance(config_override, dict):
+                config_dict = config_override
+            else:
+                # Try to convert (this will succeed when wandb.agent has provided wandb.config)
+                try:
+                    config_dict = dict(config_override)
+                except Exception as e:
+                    # Fallback: log and continue with no overrides
+                    logger.warning(
+                        "Could not convert config_override to dict: %s. Ignoring sweep overrides for this run.",
+                        e,
+                    )
+                    config_dict = None
+
+        # If we got a config dict, apply it to local args.
+        # NOTE: keys in wandb.config should match your CLI arg names (e.g. 'lr', 'batch_size').
+        if config_dict:
+            # Normalize simple string booleans like "true"/"false"
+            for k, v in list(config_dict.items()):
+                if isinstance(v, str) and v.lower() in ("true", "false"):
+                    config_dict[k] = v.lower() == "true"
+            local_args.update(config_dict)
+
+        # Recompute classes/kwargs now that we may have overrides in local_args
+        local_scheduler_class, local_scheduler_kwargs = parse_scheduler_args(
+            local_args.get("scheduler_class"), local_args.get("scheduler_kwargs")
+        )
+        local_optimizer_class = get_optimizer_class(local_args.get("optimizer_class"))
+        # optimizer kwargs: if sweep provided a dict/object, accept that; if string, parse it
+        local_optimizer_kwargs = local_args.get("optimizer_kwargs", "")
+        if isinstance(local_optimizer_kwargs, str):
+            local_optimizer_kwargs = parse_optimizer_kwargs(local_optimizer_kwargs)
+        # If it was provided via CLI originally and parsed earlier, prefer parsed CLI unless overridden
+        if not local_optimizer_kwargs and optimizer_kwargs_cli:
+            local_optimizer_kwargs = optimizer_kwargs_cli
+
+        local_loss_kwargs = local_args.get("loss_kwargs", "")
+        if isinstance(local_loss_kwargs, str):
+            local_loss_kwargs = parse_optimizer_kwargs(local_loss_kwargs)
+        if not local_loss_kwargs and loss_kwargs:
+            local_loss_kwargs = loss_kwargs
+
+        # seeds
+        seed = int(local_args.get("base_seed", 42)) + run_idx
+        logger.info(
+            "=== Starting run %d/%d with seed %d ===", run_idx + 1, int(local_args.get("num_runs", 1)), seed
+        )
 
         # Set seeds
         torch.manual_seed(seed)
@@ -180,84 +237,140 @@ def main(args):
         torch.backends.cudnn.benchmark = False
 
         # Update experiment/run name
-        run_name = f"{args.experiment_name}_run{run_idx+1}"
+        run_name = f"{local_args.get('experiment_name')}_run{run_idx+1}"
 
-        # WandB logger
+        # WandB logger (do NOT call wandb.init() manually; let WandbLogger manage runs)
         wandb_logger = None
-        if not args.no_wandb:
-            wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=run_name, save_dir=logging_directory)
+        if not local_args.get("no_wandb"):
+            wandb_logger = WandbLogger(
+                log_model=True,
+                project=local_args.get("project_name"),
+                name=run_name,
+                save_dir=logging_directory,
+            )
 
         callbacks = [checkpoint_callback]
-        if args.early_stopping:
+        if local_args.get("early_stopping"):
             early_stopping_callback = EarlyStopping(
-                monitor=args.monitor,
-                mode=args.monitor_mode,
-                patience=args.early_stopping_patience,
-                min_delta=args.early_stopping_delta,
+                monitor=local_args.get("monitor"),
+                mode=local_args.get("monitor_mode"),
+                patience=int(local_args.get("early_stopping_patience")),
+                min_delta=float(local_args.get("early_stopping_delta")),
                 verbose=True,
             )
             callbacks.append(early_stopping_callback)
 
-        # Instantiate model
-        # RNNLightning uses self.hparams, so we pass the same kw args here
+        # Instantiate model with local args (these values may have been overridden by sweep)
         model = RNNLightning(
-            num_hidden_layers=args.num_hidden_layers,
-            num_hidden=args.num_hidden,
-            rnn_type=args.rnn_type,
-            optimizer_class=optimizer_class,
-            optimizer_kwargs=optimizer_kwargs,
-            lr=args.lr,
-            batch_size=args.batch_size,
-            dropout=args.dropout,
-            max_epochs=args.max_epochs,
-            layer_skip=args.layer_skip,
-            use_layernorm=args.use_layernorm,
-            scheduler_class=scheduler_class,
-            scheduler_kwargs=scheduler_kwargs,
-            log_every_n_steps=args.log_every_n_steps,
+            num_hidden_layers=int(local_args.get("num_hidden_layers")),
+            num_hidden=int(local_args.get("num_hidden")),
+            rnn_type=local_args.get("rnn_type"),
+            optimizer_class=local_optimizer_class,
+            optimizer_kwargs=local_optimizer_kwargs,
+            lr=float(local_args.get("lr")),
+            batch_size=int(local_args.get("batch_size")),
+            dropout=float(local_args.get("dropout")),
+            max_epochs=int(local_args.get("max_epochs")),
+            layer_skip=int(local_args.get("layer_skip")),
+            use_layernorm=bool(local_args.get("use_layernorm")),
+            scheduler_class=local_scheduler_class,
+            scheduler_kwargs=local_scheduler_kwargs,
+            log_every_n_steps=int(local_args.get("log_every_n_steps")),
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
             test_dataset=test_dataset,
-            num_inputs=args.num_inputs,
-            loss_fn=args.loss_fn,
-            loss_kwargs=loss_kwargs,
-            num_outputs=(args.num_outputs if args.num_outputs > 0 else None),
+            num_inputs=int(local_args.get("num_inputs")),
+            loss_fn=local_args.get("loss_fn"),
+            loss_kwargs=local_loss_kwargs,
+            num_outputs=(int(local_args.get("num_outputs")) if int(local_args.get("num_outputs")) > 0 else None),
         )
 
         # Optional torch.compile
-        if args.torch_compile:
+        if local_args.get("torch_compile"):
             try:
                 logger.info("Attempting torch.compile(model)")
-                model = torch.compile(model)
+                compiled = torch.compile(model)
+                model = compiled
             except Exception as e:
                 logger.warning("torch.compile failed: %s", e)
 
         # Trainer
         trainer = Trainer(
-            max_epochs=args.max_epochs,
+            max_epochs=int(local_args.get("max_epochs")),
             accelerator=accelerator,
-            logger=wandb_logger if not args.no_wandb else None,
+            logger=wandb_logger if not local_args.get("no_wandb") else None,
             callbacks=callbacks,
-            log_every_n_steps=args.log_every_n_steps,
+            log_every_n_steps=int(local_args.get("log_every_n_steps")),
         )
 
         # Train
         trainer.fit(model)
 
         logger.info("Starting test for run %d using best checkpoint", run_idx + 1)
-        trainer.test(
-            model=model,
-            ckpt_path="best"
-        )
+        trainer.test(model=model, ckpt_path="best")
 
         # Finalize WandB logger
-        if wandb_logger and not args.no_wandb:
+        if wandb_logger and not local_args.get("no_wandb"):
             try:
                 wandb_logger.finalize("success")
             except Exception as e:
                 logger.warning("wandb_logger.finalize() failed: %s", e)
 
         logger.info("Run %d finished. Best checkpoint: %s", run_idx + 1, checkpoint_callback.best_model_path or "N/A")
+
+    # If sweep is enabled, set up the sweep and use wandb.agent to run trials
+    if args.wandb_sweep_enable:
+        # Validate YAML path
+        if not args.wandb_sweep_yaml:
+            logger.error("WandB sweep is enabled but no --wandb-sweep-yaml path was provided.")
+            sys.exit(2)
+        sweep_yaml_path = os.path.abspath(args.wandb_sweep_yaml)
+        if not os.path.exists(sweep_yaml_path):
+            logger.error("WandB sweep yaml file not found: %s", sweep_yaml_path)
+            sys.exit(2)
+
+        # load yaml
+        try:
+            with open(sweep_yaml_path, "r") as f:
+                sweep_config = yaml.safe_load(f)
+        except Exception as e:
+            logger.error("Failed to load sweep yaml: %s", e)
+            sys.exit(2)
+
+        # create the sweep on wandb
+        try:
+            sweep_id = wandb.sweep(sweep_config, project=args.project_name)
+            logger.info("Created/returned sweep id: %s", sweep_id)
+            # print some helpful info
+            print(f"Create sweep with ID: {sweep_id}")
+            if "project" in sweep_config:
+                print(f"Sweep project in yaml: {sweep_config.get('project')}")
+            print(f"Sweep URL: https://wandb.ai/{args.project_name}/sweeps/{sweep_id}")
+        except Exception as e:
+            logger.error("wandb.sweep() failed: %s", e)
+            sys.exit(2)
+
+        # Define the function that wandb.agent will call for each trial
+        def _agent_run():
+            # Let the wandb.agent / WandbLogger lifecycle create/manage wandb runs.
+            # wandb.config is populated by the agent; we can access it directly here.
+            cfg = wandb.config
+            num_runs_local = int(args.num_runs)
+            for run_idx in range(num_runs_local):
+                run_single_run(run_idx, config_override=cfg)
+
+        # Start agent. pass count if user provided positive integer
+        count = int(args.wandb_sweep_count) if args.wandb_sweep_count and args.wandb_sweep_count > 0 else None
+        logger.info("Starting wandb.agent for sweep_id=%s (count=%s)", sweep_id, str(count))
+        try:
+            wandb.agent(sweep_id, function=_agent_run, count=count)
+        except Exception as e:
+            logger.error("wandb.agent failed: %s", e)
+            sys.exit(2)
+    else:
+        # Not sweeping -> normal runs
+        for run_idx in range(args.num_runs):
+            run_single_run(run_idx, config_override=None)
 
 
 if __name__ == "__main__":
@@ -267,7 +380,7 @@ if __name__ == "__main__":
     # Data / logging
     parser.add_argument("--data", type=str, default="./data/v3_dataset.ds", help="Path to dataset (torch file).")
     parser.add_argument("--experiment-name", type=str, default="rnn_test", help="WandB experiment/run name.")
-    parser.add_argument("--project-name", type=str, default="RNN-Lightning", help="WandB project name.")
+    parser.add_argument("--project-name", type=str, default="Non-Spiking", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
     parser.add_argument("--checkpoint-path", type=str, default="models/RNN", help="Directory to save checkpoints.")
     parser.add_argument("--monitor", type=str, default="val_loss", help="Metric to monitor for checkpointing.")
@@ -307,6 +420,51 @@ if __name__ == "__main__":
     parser.add_argument("--torch-compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
 
+    # WandB sweep related
+    parser.add_argument("--wandb-sweep-enable", action="store_true", help="Enable WandB hyperparameter sweep mode. When enabled, many CLI hyperparameters are ignored and should be controlled via the sweep yaml.")
+    parser.add_argument("--wandb-sweep-yaml", type=str, default="sweep_rnn.yaml", help="Path to WandB sweep yaml file (required when --wandb-sweep-enable).")
+    parser.add_argument("--wandb-sweep-count", type=int, default=0, help="Optional: max number of runs for wandb.agent (0 means no explicit limit).")
+
     args = parser.parse_args()
+
+    # If sweep mode is enabled, check for any CLI-provided hyperparameters that would be meaningless
+    if args.wandb_sweep_enable:
+        # list of argument dest names that are usually controlled by sweep and should not be set on CLI
+        suspect_args = [
+            "lr",
+            "batch_size",
+            "num_hidden",
+            "num_hidden_layers",
+            "dropout",
+            "optimizer_class",
+            "optimizer_kwargs",
+            "scheduler_class",
+            "scheduler_kwargs",
+            "loss_fn",
+            "loss_kwargs",
+        ]
+        conflicting = []
+        for dest in suspect_args:
+            cli_val = getattr(args, dest, None)
+            default_val = parser.get_default(dest)
+            # Special handling for empty string vs None
+            if isinstance(default_val, str):
+                is_conflict = (cli_val != default_val and cli_val != "" and cli_val is not None)
+            else:
+                is_conflict = (cli_val != default_val)
+            if is_conflict:
+                conflicting.append((dest, default_val, cli_val))
+
+        if conflicting:
+            msg_lines = [
+                "Incompatible CLI arguments detected while WandB sweep mode is enabled.",
+                "When using --wandb-sweep-enable you should let the sweep YAML control hyperparameters.",
+                "Please remove the following CLI flags or disable sweep mode:"
+            ]
+            for dest, default_val, cli_val in conflicting:
+                msg_lines.append(f"  --{dest.replace('_', '-')} (default: {default_val!r})  -- you provided: {cli_val!r}")
+            logger.error("\n".join(msg_lines))
+            parser.print_help()
+            sys.exit(2)
 
     main(args)

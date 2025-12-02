@@ -1,0 +1,48 @@
+# sweep_rnn.yaml
+name: "Sweep_RNN"
+method: random            # random | grid | bayes
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  # model architecture
+  rnn_type:
+    value: "rnn"
+  num_hidden:
+    values: [16, 32, 64, 128]
+  num_hidden_layers:
+    values: [1, 2, 3, 4]
+  dropout:
+    min: 0.0
+    max: 0.5
+    distribution: uniform
+
+  # optimization
+  lr:
+    min: 1e-5
+    max: 1e-3
+    distribution: log_uniform_values
+  batch_size:
+    values: [32, 64, 128]
+  optimizer_class:
+    value: "AdamW"
+
+  # scheduler (if you choose 'cosine', you can also set scheduler_kwargs via the CLI or add it here)
+  scheduler_class:
+    value: "Cosine"
+
+  # loss
+  loss_fn:
+    value: "mse"
+
+  max_epochs:
+    values: [50]
+
+run_cap: 100
+
+early_terminate:
+  type: hyperband
+  s: 3
+  eta: 3
+  max_iter: 50
