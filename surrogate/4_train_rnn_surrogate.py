@@ -265,7 +265,7 @@ if __name__ == "__main__":
     default_max_epochs = 10
 
     # Data / logging
-    parser.add_argument("--data", type=str, default="./data/dataset.ds", help="Path to dataset (torch file).")
+    parser.add_argument("--data", type=str, default="./data/v3_dataset.ds", help="Path to dataset (torch file).")
     parser.add_argument("--experiment-name", type=str, default="rnn_test", help="WandB experiment/run name.")
     parser.add_argument("--project-name", type=str, default="RNN-Lightning", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
