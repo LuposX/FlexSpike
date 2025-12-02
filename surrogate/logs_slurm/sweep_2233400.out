@@ -6999,3 +6999,17 @@ Sweep URL: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/sweeps/kxbgxnd8
 Validation DataLoader 0:  80%|████████  | 4/5 [00:21<00:05,  0.19it/s][A
 Validation DataLoader 0: 100%|██████████| 5/5 [00:24<00:00,  0.20it/s][A
                                                                       [AEpoch 1: 100%|██████████| 7/7 [03:48<00:00,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.24e-6]Epoch 1: 100%|██████████| 7/7 [03:48<00:00,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.24e-6]Epoch 1:   0%|          | 0/7 [00:00<?, ?it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.24e-6]        Epoch 2:   0%|          | 0/7 [00:00<?, ?it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.24e-6]Epoch 2:  14%|█▍        | 1/7 [00:34<03:29,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.24e-6]Epoch 2:  14%|█▍        | 1/7 [00:34<03:29,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.21e-6]Epoch 2:  29%|██▊       | 2/7 [01:07<02:48,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.21e-6]Epoch 2:  29%|██▊       | 2/7 [01:07<02:48,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.21e-6]Epoch 2:  43%|████▎     | 3/7 [01:40<02:13,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.21e-6]Epoch 2:  43%|████▎     | 3/7 [01:40<02:13,  0.03it/s, v_num=9j7y, val_loss=0.257, train_loss=0.259, lr=6.21e-6]
+============================= JOB FEEDBACK =============================
+
+NodeName=uc3n046
+Job ID: 2233400
+Cluster: uc3
+User/Group: ka_rh5993/ka_itec
+State: COMPLETED (exit code 0)
+Nodes: 1
+Cores per node: 20
+CPU Utilized: 18:00:59
+CPU Efficiency: 5.14% of 14-14:24:40 core-walltime
+Job Wall-clock time: 17:31:14
+Memory Utilized: 32.59 GB
+Memory Efficiency: 26.07% of 125.00 GB (125.00 GB/node)

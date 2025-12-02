@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
-#SBATCH --time=50:00:00
+#SBATCH --time=30:00:00
 #SBATCH --mem=128000
 #SBATCH --output=logs_slurm/sweep_%j.out
 #SBATCH --error=logs_slurm/sweep_%j.err

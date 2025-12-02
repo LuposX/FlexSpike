@@ -1,0 +1,205 @@
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+wandb: Agent Starting Run: xgrg7i15 with config:
+wandb: 	alpha: 0.9
+wandb: 	batch_size: 2048
+wandb: 	beta: 0
+wandb: 	bh_init: -6
+wandb: 	bh_max: -4
+wandb: 	bntt_time_steps: 100
+wandb: 	data_path: ./data/small_dataset.ds
+wandb: 	detach_rec: True
+wandb: 	dropout: 0
+wandb: 	epochs: 50
+wandb: 	layer_skip: 0
+wandb: 	lr: 0.0003488795650616366
+wandb: 	neuron_type: SRC
+wandb: 	num_hidden: 16
+wandb: 	num_hidden_layers: 2
+wandb: 	optimizer_class: AdamW
+wandb: 	r: 2
+wandb: 	relu_bypass: False
+wandb: 	rho: 3
+wandb: 	rs: -7
+wandb: 	scheduler_class: cosine
+wandb: 	scheduler_kwargs: 
+wandb: 	surrogate_gradient: atan
+wandb: 	temporal_skip: -1
+wandb: 	use_bntt: False
+wandb: 	use_layernorm: False
+wandb: 	z: 0
+wandb: 	zdep_s: 0
+wandb: 	zhyp_s: 0.9
+wandb: Currently logged in as: lupos to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run xgrg7i15
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100355-xgrg7i15
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run honest-sweep-1
+wandb: ⭐️ View project at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: 🧹 View sweep at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/sweeps/teyag2bf
+wandb: 🚀 View run at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/xgrg7i15
+wandb: updating run metadata; uploading data
+wandb: uploading summary, console lines 0-0
+wandb: 🚀 View run honest-sweep-1 at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/xgrg7i15
+wandb: ⭐️ View project at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100355-xgrg7i15/logs
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 165, in __getattr__
+    return self.__getitem__(key)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 130, in __getitem__
+    return self._items[key]
+           ~~~~~~~~~~~^^^^^
+KeyError: 'loss_kwargs'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/agents/pyagent.py", line 297, in _run_job
+    self._function()
+  File "/pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/3_hyperparameter_search_rsnn.py", line 259, in training_run
+    loss_kwargs = parse_loss_kwargs(config.loss_kwargs)
+                                    ^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 167, in __getattr__
+    raise AttributeError(
+AttributeError: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+
+wandb: ERROR Run xgrg7i15 errored: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+wandb: Agent Starting Run: 9wso3tvy with config:
+wandb: 	alpha: 0.9
+wandb: 	batch_size: 2048
+wandb: 	beta: 0
+wandb: 	bh_init: -2
+wandb: 	bh_max: -4
+wandb: 	bntt_time_steps: 100
+wandb: 	data_path: ./data/small_dataset.ds
+wandb: 	detach_rec: True
+wandb: 	dropout: 0
+wandb: 	epochs: 50
+wandb: 	layer_skip: 0
+wandb: 	lr: 0.00025640499658843223
+wandb: 	neuron_type: SRC
+wandb: 	num_hidden: 64
+wandb: 	num_hidden_layers: 2
+wandb: 	optimizer_class: AdamW
+wandb: 	r: 2
+wandb: 	relu_bypass: False
+wandb: 	rho: 3
+wandb: 	rs: -7
+wandb: 	scheduler_class: cosine
+wandb: 	scheduler_kwargs: 
+wandb: 	surrogate_gradient: atan
+wandb: 	temporal_skip: -1
+wandb: 	use_bntt: False
+wandb: 	use_layernorm: False
+wandb: 	z: 0
+wandb: 	zdep_s: 0
+wandb: 	zhyp_s: 0.9
+wandb: setting up run 9wso3tvy
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100400-9wso3tvy
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run whole-sweep-2
+wandb: ⭐️ View project at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: 🧹 View sweep at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/sweeps/teyag2bf
+wandb: 🚀 View run at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/9wso3tvy
+wandb: updating run metadata; uploading code/surrogate/3_hyperparameter_search_rsnn.py; uploading wandb-metadata.json
+wandb: uploading console lines 0-0
+wandb: 🚀 View run whole-sweep-2 at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/9wso3tvy
+wandb: ⭐️ View project at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100400-9wso3tvy/logs
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 165, in __getattr__
+    return self.__getitem__(key)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 130, in __getitem__
+    return self._items[key]
+           ~~~~~~~~~~~^^^^^
+KeyError: 'loss_kwargs'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/agents/pyagent.py", line 297, in _run_job
+    self._function()
+  File "/pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/3_hyperparameter_search_rsnn.py", line 259, in training_run
+    loss_kwargs = parse_loss_kwargs(config.loss_kwargs)
+                                    ^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 167, in __getattr__
+    raise AttributeError(
+AttributeError: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+
+wandb: ERROR Run 9wso3tvy errored: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+wandb: Agent Starting Run: iglr2uh5 with config:
+wandb: 	alpha: 0.9
+wandb: 	batch_size: 2048
+wandb: 	beta: 0
+wandb: 	bh_init: -6
+wandb: 	bh_max: -4
+wandb: 	bntt_time_steps: 100
+wandb: 	data_path: ./data/small_dataset.ds
+wandb: 	detach_rec: True
+wandb: 	dropout: 0
+wandb: 	epochs: 50
+wandb: 	layer_skip: 0
+wandb: 	lr: 0.002640818715424294
+wandb: 	neuron_type: SRC
+wandb: 	num_hidden: 64
+wandb: 	num_hidden_layers: 6
+wandb: 	optimizer_class: AdamW
+wandb: 	r: 2
+wandb: 	relu_bypass: False
+wandb: 	rho: 3
+wandb: 	rs: -7
+wandb: 	scheduler_class: cosine
+wandb: 	scheduler_kwargs: 
+wandb: 	surrogate_gradient: atan
+wandb: 	temporal_skip: -1
+wandb: 	use_bntt: False
+wandb: 	use_layernorm: False
+wandb: 	z: 0
+wandb: 	zdep_s: 0
+wandb: 	zhyp_s: 0.9
+wandb: setting up run iglr2uh5
+wandb: Tracking run with wandb version 0.22.2
+wandb: Run data is saved locally in /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100411-iglr2uh5
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run golden-sweep-3
+wandb: ⭐️ View project at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: 🧹 View sweep at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/sweeps/teyag2bf
+wandb: 🚀 View run at https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/iglr2uh5
+wandb: updating run metadata; uploading code/surrogate/3_hyperparameter_search_rsnn.py; uploading wandb-metadata.json
+wandb: uploading output.log; uploading config.yaml
+wandb: 🚀 View run golden-sweep-3 at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep/runs/iglr2uh5
+wandb: ⭐️ View project at: https://wandb.ai/lupos/SpikeSynth-Surrogate-Sweep
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /scratch/ka_rh5993/wandb_logs/wandb/run-20251127_100411-iglr2uh5/logs
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 165, in __getattr__
+    return self.__getitem__(key)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 130, in __getitem__
+    return self._items[key]
+           ~~~~~~~~~~~^^^^^
+KeyError: 'loss_kwargs'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/agents/pyagent.py", line 297, in _run_job
+    self._function()
+  File "/pfs/data6/home/ka/ka_itec/ka_rh5993/SpikeSynth/surrogate/3_hyperparameter_search_rsnn.py", line 259, in training_run
+    loss_kwargs = parse_loss_kwargs(config.loss_kwargs)
+                                    ^^^^^^^^^^^^^^^^^^
+  File "/home/ka/ka_itec/ka_rh5993/.local/lib/python3.12/site-packages/wandb/sdk/wandb_config.py", line 167, in __getattr__
+    raise AttributeError(
+AttributeError: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+
+wandb: ERROR Run iglr2uh5 errored: <class 'wandb.sdk.wandb_config.Config'> object has no attribute 'loss_kwargs'
+wandb: ERROR Detected 3 failed runs in the first 60 seconds, killing sweep.
+wandb: To disable this check set WANDB_AGENT_DISABLE_FLAPPING=true

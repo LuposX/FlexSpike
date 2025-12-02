@@ -1,0 +1,15 @@
+
+============================= JOB FEEDBACK =============================
+
+NodeName=uc3n002
+Job ID: 2253256
+Cluster: uc3
+User/Group: ka_rh5993/ka_itec
+State: FAILED (exit code 2)
+Nodes: 1
+Cores per node: 20
+CPU Utilized: 00:00:08
+CPU Efficiency: 0.98% of 00:13:40 core-walltime
+Job Wall-clock time: 00:00:41
+Memory Utilized: 476.66 MB
+Memory Efficiency: 1.19% of 39.06 GB (1.95 GB/core)

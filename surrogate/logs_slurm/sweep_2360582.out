@@ -1,0 +1,15 @@
+
+============================= JOB FEEDBACK =============================
+
+NodeName=uc3n003
+Job ID: 2360582
+Cluster: uc3
+User/Group: ka_rh5993/ka_itec
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 20
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:03:00 core-walltime
+Job Wall-clock time: 00:00:09
+Memory Utilized: 0.00 MB
+Memory Efficiency: 0.00% of 39.06 GB (1.95 GB/core)
