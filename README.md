@@ -7,8 +7,8 @@
 > [!NOTE]
 > This project is currently in development as part of a bachelor’s thesis.
 
-![header](Images/leakyParallel_simulation.pdf)
-![header](Images/comparison_skip_conenction_8L.pdf)
+![header](Images/leakyParallel_simulation.png)
+![header](Images/comparison_skip_conenction_8L.png)
 
 
 ## 🚀 Installation
