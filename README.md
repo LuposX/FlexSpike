@@ -43,7 +43,7 @@ pip install -r requirements.txt
 ### Surrogate
 
 To create the surrogate model, navigate to the `surrogate` folder.
-Place your **SPIKE data** for the circuit you want to simulate into the `data` directory.
+Place your **SPIKE data** for the circuit you want to simulate into the `data` directory, alternativeky see [data section](#data).
 
 1. Use the notebook `1_create_surrogate_dataset.ipynb` to generate the dataset for training the surrogate model.
    The resulting dataset will be saved as `data/dataset.ds`.
