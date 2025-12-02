@@ -7,6 +7,10 @@
 > [!NOTE]
 > This project is currently in development as part of a bachelor’s thesis.
 
+![header](Images/leakyParallel_simulation.pdf)
+![header](Images/comparison_skip_conenction_8L.pdf)
+
+
 ## 🚀 Installation
 
 Clone the repository:
@@ -42,7 +46,7 @@ Place your **SPIKE data** for the circuit you want to simulate into the `data` d
 
 1. Use the notebook `1_create_surrogate_dataset.ipynb` to generate the dataset for training the surrogate model.
    The resulting dataset will be saved as `data/dataset.ds`.
-2. Use `2_tain_gpt_surrogate.py` to train the baseline GPT surrogate model, or `2_train_rsnn_surrogate.py` to train the RSNN surrogate model.
+2. Use `2_tain_gpt_surrogate.py` to train the baseline GPT surrogate model, or `2_train_rsnn_surrogate.py` to train the RSNN surrogate model, or `4_train_rnn_surrogate.py` to train a non-spiking surrogate model.
    Logging requires a **Weights & Biases (wandb)** account.
 3. To perform hyperparameter optimization, run:
 
@@ -50,9 +54,17 @@ Place your **SPIKE data** for the circuit you want to simulate into the `data` d
    python 3_hyperparameter_search_rsnn.py
    ```
 
-#### Running Hyperparameter Search on a Cluster
+### Running Hyperparameter Search and Training on a Cluster
 
-If you want to run the hyperparameter search on a cluster system that uses **SLURM**, you can use the file `slurm_sweep.sh` in the `surrogate` folder.
+If you want to run hyperparameter search or training on a cluster system that uses **SLURM**, you can use the SLURM scripts in the `surrogate` folder.
+
+Available scripts:
+* `slurm_spiking.sh` — train a **spiking** model
+* `slurm_sweep_spiking.sh` — run a **hyperparameter search** for spiking models
+* `slurm_non_spiking.sh` — train a **non-spiking** model
+* `slurm_sweep_non_spiking.sh` — run a **hyperparameter search** for non-spiking models
+
+General workflow:
 
 1. Edit the script to adjust the task parameters to your requirements.
 
@@ -75,6 +87,21 @@ If you want to run the hyperparameter search on a cluster system that uses **SLU
    ```
 
 All SLURM logs will be stored in the `logs_slurm` directory.
+
+
+### Visualization
+
+In the `utils` folder, the `generate_graphics.ipynb` notebook can be used to create visualizations related to the project, including:
+
+* simulation plots of spiking neurons
+* loss curves
+* spiking activity plots
+* magnitude gradient plot during the backward pass
+* contour plots for hyperparameter search
+* calculation of mean and standard deviation for multiple runs, and improvement over baseline
+* Bayesian improvement over runs
+* bar plots for test metrics
+
 
 
 ### pLSNN
