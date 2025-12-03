@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
 #SBATCH --time=30:00:00
 #SBATCH --mem=128000
-#SBATCH --output=logs_slurm/sweep_%j.out
-#SBATCH --error=logs_slurm/sweep_%j.err
+#SBATCH --output=logs_slurm/sweep_spiking_%j.out
+#SBATCH --error=logs_slurm/sweep_spiking_%j.err
 
 # Load Python module and activate environment if you have one
 module load devel/miniforge
