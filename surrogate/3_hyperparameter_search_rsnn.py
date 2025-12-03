@@ -373,8 +373,8 @@ def create_and_run_sweep(sweep_config_path: str, project: str, logging_directory
 
 def main():
     parser = argparse.ArgumentParser(description="Create and run a wandb sweep (combined).")
-    parser.add_argument("--sweep-config", "-c", default="sweep_hyperparameter_rsnn.yaml",
-                        help="Path to sweep YAML config (default: sweep_hyperparameter_rsnn.yaml)")
+    parser.add_argument("--sweep-config", "-c", default="sweep_rsnn.yaml",
+                        help="Path to sweep YAML config (default: sweep_rsnn.yaml)")
     parser.add_argument("--project", "-p", default="test", help="W&B project name (default: test)")
     parser.add_argument("--entity", "-e", default=None, help="W&B entity (user or team), optional")
     parser.add_argument("--logging-directory", "-l", default=".temp", help="Local path of the directory we log to.")

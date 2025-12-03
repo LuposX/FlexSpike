@@ -21,6 +21,6 @@ mkdir -p /scratch/$USER/wandb_logs
 
 # Run the sweep with unbuffered output for real-time logging
 python -u 3_hyperparameter_search_rsnn.py \
-    --sweep-config sweep_hyperparameter_src.yaml \
+    --sweep-config sweep_src.yaml \
     --project SpikeSynth-Surrogate-Sweep \
     --logging-directory /scratch/$USER/wandb_logs
