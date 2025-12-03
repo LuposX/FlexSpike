@@ -37,7 +37,7 @@ parameters:
     value: "mse"
 
   max_epochs:
-    values: [50]
+    values: [3]
 
 run_cap: 100
 
@@ -45,4 +45,4 @@ early_terminate:
   type: hyperband
   s: 3
   eta: 3
-  max_iter: 50
+  max_iter: 3
