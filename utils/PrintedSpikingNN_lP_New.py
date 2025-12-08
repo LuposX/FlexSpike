@@ -1,8 +1,10 @@
+import os 
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
 from typing import Any
+
 from utils.evaluation import Evaluator
 
 # ===============================================================================
@@ -12,6 +14,18 @@ from utils.evaluation import Evaluator
 class LightningPrintedSpikingNetwork(pl.LightningModule):
     def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, surrogate_gradient, loss_fn=None, train_dataset=None, valid_dataset=None):
         super().__init__()
+
+        if ckpt_path is None or ckpt_path == "" or not isinstance(ckpt_path, str):
+            raise ValueError(
+                "Error: No checkpoint path provided. "
+                "You must supply a valid ckpt file with --surrogate-ckpt <path>."
+            )
+
+        if not os.path.isfile(ckpt_path):
+            raise FileNotFoundError(
+                f"Checkpoint file not found: {ckpt_path}"
+            )
+        
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn'])
 
         self.args = args
@@ -80,6 +94,17 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.log("val_power", valid_power, on_step=False, on_epoch=True, prog_bar=False)
 
         return {"val_loss": loss}
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        loss = self.loss_fn(self.network, x, y)
+        test_acc, test_power = self.evaluator(self.network, x, y)
+
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_acc", test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_power", test_power, on_step=False, on_epoch=True, prog_bar=False)
+
+        return {"test_loss": loss}
 
     
     def UpdateArgs(self, args):
