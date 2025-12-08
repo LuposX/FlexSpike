@@ -50,16 +50,16 @@ Place your **SPIKE data** for the circuit you want to simulate into the `data` d
 
 2. Train the surrogate model using one of the scripts:
 
-   * `2_train_gpt_surrogate.py` — baseline GPT surrogate
-   * `2_train_rsnn_surrogate.py` — RSNN surrogate
-   * `4_train_rnn_surrogate.py` — non-spiking surrogate
+   * `2_train_gpt_baseline_surrogate.py` — baseline GPT surrogate
+   * `2_train_spiking_surrogate.py` — Spiking surrogate
+   * `4_train_non_spiking_surrogate.py` — non-spiking surrogate
 
    Logging requires a **Weights & Biases (wandb)** account.
 
 3. Run hyperparameter optimization:
 
    ```sh
-   python 3_hyperparameter_search_rsnn.py
+   python 3_hyperparameter_search_spiking_network.py
    ```
 
 ### Running Hyperparameter Search and Training on a Cluster

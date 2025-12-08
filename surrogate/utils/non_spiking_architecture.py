@@ -4,7 +4,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 
 
-class RNNLightning(pl.LightningModule):
+class NonSpikingNetwork(pl.LightningModule):
     def __init__(
         self,
         num_hidden_layers: int = 2,

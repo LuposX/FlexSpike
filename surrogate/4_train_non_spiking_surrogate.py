@@ -26,7 +26,7 @@ from pytorch_lightning import Trainer
 from typing import Dict, Any, Optional
 
 # Ensure this import path matches your project structure
-from utils.RNN import RNNLightning
+from utils.non_spiking_architecture import NonSpikingNetwork
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -297,7 +297,7 @@ def main(args):
 
         logger.info("Instantiating model with num_hidden=%s, num_hidden_layers=%s, rnn_type=%s, lr=%s",
                     local_args.get("num_hidden"), local_args.get("num_hidden_layers"), local_args.get("rnn_type"), local_args.get("lr"))
-        model = RNNLightning(
+        model = NonSpikingNetwork(
             num_hidden_layers=int(local_args.get("num_hidden_layers")),
             num_hidden=int(local_args.get("num_hidden")),
             rnn_type=local_args.get("rnn_type"),

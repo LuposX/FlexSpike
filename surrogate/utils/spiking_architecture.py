@@ -10,11 +10,11 @@ import torch.nn as nn
 
 import re
 
-from .src_cell import SRC
+from .spiking_recurrent_cell_neuron import SRC
 
 from typing import Callable, Union, Optional
 
-class SpikeSynth(L.LightningModule):
+class SpikingNetwork(L.LightningModule):
     def __init__(
                  self,
                  num_hidden_layers,

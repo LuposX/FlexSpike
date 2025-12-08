@@ -5,7 +5,7 @@ which executes the training function in-process.
 This basically does a hyperparameetr search over possbile valeus as defiend in the sweep.yaml.
 
 Usage:
-    python 3_hyperparameter_search_rsnn.py --sweep-config sweep_rsnn.yaml --project test
+    python 3_hyperparameter_search_spiking_network.py --sweep-config sweep_rsnn.yaml --project test
 """
 
 import argparse
@@ -27,7 +27,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 import snntorch as snn
 
-from utils.RSNN import SpikeSynth
+from utils.spiking_architecture import SpikingNetwork
 
 import ast
 from collections.abc import Mapping
@@ -269,7 +269,7 @@ def training_run():
 
 
         # Build model instance (mirror your original kwargs)
-        model = SpikeSynth(
+        model = SpikingNetwork(
             optimizer_class=optimizer_class,
             optimizer_kwargs=optimizer_kwargs,
             beta=config.beta,

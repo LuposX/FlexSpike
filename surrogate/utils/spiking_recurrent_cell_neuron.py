@@ -65,6 +65,7 @@ class _StraightThroughReLU(torch.autograd.Function):
 class SRC(nn.Module):
     """Spiking Recurrent Cell (SRC) layer.
 
+    See: https://arxiv.org/abs/2306.03623
     This module processes a sequence of input pulses and returns the sequence of
     output pulses (sout) together with the final states (i, h, hs).
     """

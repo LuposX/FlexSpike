@@ -29,7 +29,7 @@ from pytorch_lightning.utilities.model_summary import ModelSummary
 
 from typing import Callable, Union, Optional
 
-from utils.RSNN import SpikeSynth
+from utils.spiking_architecture import SpikingNetwork
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -194,7 +194,7 @@ def main(args):
 
 
         # Instantiate model
-        model = SpikeSynth(
+        model = SpikingNetwork(
             optimizer_class=optimizer_class,
             optimizer_kwargs=optimizer_kwargs,
             beta=args.beta,
