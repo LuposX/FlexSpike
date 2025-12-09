@@ -13,7 +13,7 @@ class GPTLightning(pl.LightningModule):
     with shape (B, seq_len) or (B, seq_len, 1) depending on your dataset.
     """
 
-    def __init__(self, model_config, max_epochs, lr=1e-3, weight_decay=0.0, loss_fn=None):
+    def __init__(self, model_config, max_epochs, lr=1e-3, weight_decay=0.0):
         super().__init__()
         # Save hyperparameters for checkpointing / config
         self.save_hyperparameters()
@@ -21,7 +21,7 @@ class GPTLightning(pl.LightningModule):
         # Build model
         self.model = GPT(model_config)
         # default to MSELoss if none provided (matches your training code)
-        self.loss_fn = loss_fn if loss_fn is not None else torch.nn.MSELoss()
+        self.loss_fn = torch.nn.MSELoss()
         self.lr = lr
         self.weight_decay = weight_decay
         self.max_epochs = max_epochs
