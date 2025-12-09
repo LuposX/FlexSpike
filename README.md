@@ -108,17 +108,21 @@ The notebook `utils/generate_graphics.ipynb` can generate:
 * bar plots for test metrics
 
 
-### pLSNN
+### Full Network
 
-To train the full pLSNN model, use:
+First a flexible analog circuit is build, that behaves like a single (spiking) neuron. A digital neural network is then trained to accurately replicate this circuit, serving as a surrogate neuron model. By connecting many of these surrogate neurons in software, we can design and train a **full neural network** whose structure mirrors the eventual physical system. After training, the learned connections between surrogate neurons are converted into resistor values. Using those resistor values to wire together the unchanged analog neuron circuits yields a complete physical neural network that implements the trained digital model.
+
+To train the full Network, use:
 
 ```
-train_pRSNN.ipynb
+train_full_network.py
 ```
 
-* To include **variation**, replace `exp_pSNN_lP.py` with `exp_pSNN_var_lP.py`.
-* To reproduce the **baseline approach** from [1], switch to `exp_pSNN.py`.
-  A separate surrogate model must be trained in the `surrogate_baseline` directory.
+or 
+
+```
+slurm_full_network.sh
+```
 
 
 <a id="data"></a>

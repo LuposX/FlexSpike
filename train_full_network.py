@@ -43,7 +43,7 @@ def parse_args():
 
     # dataset / run basics
     p.add_argument("--dataset", type=int, default=0, help="Dataset index. See utils.Loader.py")
-    p.add_argument("--seed", type=int, default=43, help="SEED value")
+    p.add_argument("--seed", type=int, default=42, help="SEED value")
     p.add_argument("--device", type=str, choices=["cpu", "gpu"], default="cpu", help="Device to use")
     p.add_argument("--epochs", type=int, default=100, help="Number of training epochs (overrides config EPOCH)")
     p.add_argument("--timelimit", type=float, default=0.1, help="TIMELIMITATION value")
