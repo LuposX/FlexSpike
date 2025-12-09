@@ -34,10 +34,11 @@ echo "[$(date)] Starting Python script..."
 python -u train_full_network.py  \
     --project Spike-Synth-Full \
     --experiment FullNetwork \
-    --timelimit 0.1 \ # maximal running time (in hour)
+    --datasets "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12"
+    --timelimit 10 \ # maximal running time (in hour)
     --epochs 100 \
     --lr 0.1 \ 
-    --lr-min 5e-2 \
+    --lr-min 5e-4 \
     --hidden [2, 2] \
     --surrogate-class x \ # Either: "baseline-gpt", "spiking" or "non-spiking"
     --surrogate-ckpt x \ # Path to checkpoint of the traiend surrogate
