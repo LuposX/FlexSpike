@@ -221,11 +221,13 @@ class GPT(nn.Module):
         self.block_size = config.block_size
         self.n_extra_params = config.n_extra_params  # Store extra parameter count
 
-        type_given = config.model_type is not None
-        params_given = all([config.n_layer is not None, config.n_head is not None, config.n_embd is not None])
-        assert type_given ^ params_given
-        if type_given:
-            config.merge_from_dict({
+        type_given = getattr(config, "model_type", None) is not None
+        params_given = all(getattr(config, name, None) is not None for name in ("n_layer", "n_head", "n_embd"))
+        
+        # If both are present (happens when Lightning saved the mutated config), prefer explicit params.
+        if type_given and not params_given:
+            # Only model_type is given -> fill in params from known presets
+            presets = {
                 'openai-gpt': dict(n_layer=12, n_head=12, n_embd=768),
                 'gpt2': dict(n_layer=12, n_head=12, n_embd=768),
                 'gpt2-medium': dict(n_layer=24, n_head=16, n_embd=1024),
@@ -237,7 +239,15 @@ class GPT(nn.Module):
                 'gpt-nano': dict(n_layer=3, n_head=3, n_embd=48),
                 'gpt-pico': dict(n_layer=2, n_head=2, n_embd=24),
                 'gpt-femto': dict(n_layer=1, n_head=1, n_embd=12),
-            }[config.model_type])
+            }
+            if config.model_type not in presets:
+                raise ValueError(f"unknown model_type: {config.model_type}")
+            config.merge_from_dict(presets[config.model_type])
+        elif not (type_given or params_given):
+            # Neither is provided -> error
+            raise AssertionError("GPT config must specify either model_type OR explicit n_layer/n_head/n_embd")
+        # if both are present, we keep explicit params (do nothing)
+
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Linear(1, config.n_embd),  # Token embedding for sequence and extra parameters
