@@ -13,6 +13,7 @@ import argparse
 import os
 import logging
 import torch
+import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 
 import pytorch_lightning as pl
@@ -170,9 +171,8 @@ def main(args):
             logger.warning("wandb_logger.finalize() failed: %s", e)
 
     # Test if requested
-    if args.test_after_training:
-        logger.info("Running trainer.test()")
-        trainer.test(model, dataloaders=test_loader)
+    logger.info("Running trainer.test()")
+    trainer.test(model, dataloaders=test_loader)
 
     logger.info("Best checkpoint saved at: %s", checkpoint_callback.best_model_path or "N/A")
     print("Best checkpoint saved at:", checkpoint_callback.best_model_path or "N/A")
@@ -209,12 +209,11 @@ if __name__ == "__main__":
     
     # Misc
     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Trainer.log_every_n_steps")
-    parser.add_argument("--test-after-training", dest="test_after_training", action="store_true", help="Run trainer.test() after training.")
 
     args = parser.parse_args()
 
-    if args.checkpoint_path is None:
-        args.checkpoint_path = f"models/BaselineGPT/"
+    if args.checkpoint_dir is None:
+        args.checkpoint_dir = f"models/BaselineGPT/"
 
     if args.experiment_name is None:
         args.experiment_name = args.model_type

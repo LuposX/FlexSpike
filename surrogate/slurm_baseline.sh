@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
 #SBATCH --time=30:00:00
-#SBATCH --output=logs_slurm/non_spiking_%j.out
-#SBATCH --error=logs_slurm/non_spiking_%j.err
+#SBATCH --output=logs_slurm/baseline_%j.out
+#SBATCH --error=logs_slurm/baseline_%j.err
 
 echo "[$(date)] SLURM job starting..."    # timestamped start message
 echo "Job ID: $SLURM_JOB_ID, Node: $SLURM_NODELIST"
@@ -36,10 +36,7 @@ python -u 2_train_gpt_baseline_surrogate.py  \
     --experiment-name GPT \
     --max-epochs 80 \
     --batch-size 2048 \
-    --num-hidden 64 \
-    --num-hidden-layers 4 \
     --model-type "gpt-femto" \
     --patience 20 \
     --lr 0.05 \
-    --test_after_training \
     --logging-directory /scratch/$USER/wandb_logs
