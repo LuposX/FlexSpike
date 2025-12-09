@@ -1,4 +1,5 @@
-# lightning_model.py
+#!/usr/bin/env python
+
 import math
 import torch
 import torch.nn as nn
@@ -15,7 +16,7 @@ class GPTLightning(pl.LightningModule):
     def __init__(self, model_config, max_epochs, lr=1e-3, weight_decay=0.0, loss_fn=None):
         super().__init__()
         # Save hyperparameters for checkpointing / config
-        self.save_hyperparameters(ignore=['model_config'])
+        self.save_hyperparameters()
 
         # Build model
         self.model = GPT(model_config)

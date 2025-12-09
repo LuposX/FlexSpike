@@ -447,7 +447,7 @@ if __name__ == "__main__":
     parser.add_argument("--experiment-name", type=str, default="rnn_test")
     parser.add_argument("--project-name", type=str, default="Non-Spiking")
     parser.add_argument("--logging-directory", type=str, default=".temp")
-    parser.add_argument("--checkpoint-path", type=str, default="models/RNN")
+    parser.add_argument("--checkpoint-path", type=str)
     parser.add_argument("--monitor", type=str, default="val_loss")
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min")
     parser.add_argument("--no-wandb", action="store_true")
@@ -486,6 +486,10 @@ if __name__ == "__main__":
     parser.add_argument("--wandb-sweep-count", type=int, default=0)
 
     args = parser.parse_args()
+
+    # If no checkpoint path provided, derive it from project name + rnn-type
+    if args.checkpoint_path is None:
+        args.checkpoint_path = f"models/NonSpiking/{args.rnn_type}"
 
     # Conflict checking for sweep mode
     if args.wandb_sweep_enable:

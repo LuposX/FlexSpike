@@ -73,6 +73,9 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
     )
+    torch.manual_seed(42)
+    np.random.seed(42)
+    logger.info("Set random seed to %s", 42)
 
     # Build model config
     model_config = GPT.get_default_config()
@@ -126,7 +129,7 @@ def main(args):
         monitor=args.monitor,
         mode=args.monitor_mode,
         save_top_k=args.save_top_k,
-        filename=f"{args.experiment_name}-{{epoch:02d}}-{{{args.monitor}:.2f}}",
+        filename=f"{args.experiment_name}-{args.model_type}-{{epoch:02d}}-{{{args.monitor}:.2f}}",
         save_last=True,
         dirpath=args.checkpoint_dir if args.checkpoint_dir else None,
     )
@@ -209,6 +212,9 @@ if __name__ == "__main__":
     parser.add_argument("--test-after-training", dest="test_after_training", action="store_true", help="Run trainer.test() after training.")
 
     args = parser.parse_args()
+
+    if args.checkpoint_path is None:
+        args.checkpoint_path = f"models/BaselineGPT/"
 
     if args.experiment_name is None:
         args.experiment_name = args.model_type

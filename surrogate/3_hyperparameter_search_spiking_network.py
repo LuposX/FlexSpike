@@ -233,6 +233,9 @@ def training_run():
     # Start a wandb run; wandb.agent will set the sweep config values into wandb.config
     run = wandb.init()
     try:
+        torch.manual_seed(42)
+        np.random.seed(42)
+    
         config = wandb.config
 
         # Load dataset - same path as your original script

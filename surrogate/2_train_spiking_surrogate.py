@@ -267,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--experiment-name", type=str, default="test", help="WandB experiment/run name.")
     parser.add_argument("--project-name", type=str, default="Spike-Synth-Surrogate", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
-    parser.add_argument("--checkpoint-path", type=str, default="models/SRNN", help="Directory to save checkpoints.")
+    parser.add_argument("--checkpoint-path", type=str, help="Directory to save checkpoints.")
     parser.add_argument("--monitor", type=str, default="val_loss", help="Metric to monitor for checkpointing.")
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min", help="Monitor mode for checkpointing/early stopping.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging.")
@@ -315,5 +315,8 @@ if __name__ == "__main__":
     parser.add_argument("--loss-kwargs", type=str, default="", help="Optional loss kwargs as key=value pairs separated by commas, e.g. 'delta=0.5' for Huber.")
 
     args = parser.parse_args()
+
+    if args.checkpoint_path is None:
+        args.checkpoint_path = f"models/Spiking/{args.neuron_type}"
 
     main(args)

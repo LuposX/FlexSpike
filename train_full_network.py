@@ -31,6 +31,7 @@ import utils.PrintedSpikingNN_lP_New as pSNN
 
 from surrogate.utils.spiking_architecture import SpikingNetwork
 from surrogate.utils.non_spiking_architecture import NonSpikingNetwork
+from surrogate.utils.MyTransformer_lP import GPTLightning, GPT
 
 # --- Logging setup ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -54,13 +55,15 @@ def parse_args():
     # model topology
     p.add_argument("--hidden", type=int, nargs="*", default=None,
                    help="Hidden layer sizes, e.g. --hidden 128 64 (if omitted, will use config/defaults)")
+    p.add_argument("--surrogate-class", type=str, choices=["baseline-gpt", "spiking", "non-spiking"], default="spiking",
+                   help="Which type of surrogate you want to use.")
 
     # logging / checkpoint
     p.add_argument("--experiment", type=str, default="test", help="WandB experiment/run name")
     p.add_argument("--project", type=str, default="Spike-Synth-Full", help="WandB project name")
     p.add_argument("--log-dir", type=str, default=".temp", help="Directory for wandb/local logs")
-    p.add_argument("--checkpoint-dir", type=str, default="models/SRNN", help="Where to save checkpoints")
-    p.add_argument("--surrogate-ckpt", type=str, default="surrogate/models/SRNN/test-runrun_idx=0-epoch=02-val_loss=0.14.ckpt", help="Optional surrogate model checkpoint path for SpikeSynth")
+    p.add_argument("--checkpoint-dir", type=str, help="Where to save checkpoints")
+    p.add_argument("--surrogate-ckpt", type=str, default="surrogate/models/Spiking/LeakyParallel/RSNN_wLMSE-runrun_idx=0-epoch=78-val_loss=0.07.ckpt.ckpt", help="Surrogate model checkpoint path for SpikeSynth")
 
     # runtime flags
     p.add_argument("--progressive", action="store_true", help="Set PROGRESSIVE flag")
@@ -71,7 +74,11 @@ def parse_args():
 
 def main():
     logger.info("Starting train_snn.py")
+    
     args_cli = parse_args()
+    if args_cli.checkpoint_dir is None:
+        args_cli.checkpoint_dir = f"models/FullNetwork/{args_cli.surrogate_class}"
+    
     logger.info("Parsed CLI args: %s", args_cli)
 
     # Build overrides dict for configuration.load_args
@@ -139,6 +146,13 @@ def main():
     os.environ["WANDB_DIR"] = logging_directory
     logger.info("Logging directory is set to %s (WANDB_DIR)", logging_directory)
 
+    if args_cli.surrogate_class == "spiking":
+        surrogate_class = SpikingNetwork
+    elif args_cli.surrogate_class == "baseline-gpt":       
+        surrogate_class = GPTLightning
+    else:
+        surrogate_class = NonSpikingNetwork
+
     # instantiate the model wrapper
     surrogate_ckpt = args_cli.surrogate_ckpt
     topology = [datainfo['N_feature']] + args.hidden + [datainfo['N_class']]
@@ -147,14 +161,14 @@ def main():
         psnn = pSNN.LightningPrintedSpikingNetwork(
             topology=topology,
             args=args,
-            model_class=SpikingNetwork,
+            model_class=surrogate_class,
             ckpt_path=surrogate_ckpt,
             train_loader=train_loader,
             valid_loader=valid_loader,
             test_loader=test_loader,
             surrogate_gradient=snn.surrogate.atan()
         )
-        logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s)", surrogate_ckpt)
+        logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_ckass=%s)", surrogate_ckpt, args_cli.surrogate_class)
     except Exception as e:
         logger.exception("Failed to instantiate PrintedSpikingNetwork: %s", e)
         raise
@@ -179,7 +193,7 @@ def main():
     # checkpoint callback
     checkpoint_callback = ModelCheckpoint(
         dirpath=args_cli.checkpoint_dir,
-        filename=args_cli.experiment + str("-pLRSNN-{epoch:02d}-{val_loss:.2f}"),
+        filename=f"{args_cli.experiment}-{args_cli.surrogate_class}-{{epoch:02d}}-{{val_loss:.2f}}",
         save_top_k=1,
         monitor="val_loss",
         mode="min"

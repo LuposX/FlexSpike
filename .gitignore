@@ -4,11 +4,12 @@ __pycache__/
 .ds
 surrogate/data/*
 surrogate/temp/*
-*.ckpt
+# *.ckpt
 *.log
 lightning_logs/*
 pLSNN/*
 wandb/*
+models/*
 surrogate/lightning_logs/*
 surrogate/pLSNN/*
 surrogate/wandb/*
