@@ -443,7 +443,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RNNLightning model")
     default_max_epochs = 10
 
-    parser.add_argument("--data", type=str, default="./data/v3_dataset.ds")
+    parser.add_argument("--data", type=str, default="./data/dataset.ds")
     parser.add_argument("--experiment-name", type=str, default="rnn_test")
     parser.add_argument("--project-name", type=str, default="Non-Spiking")
     parser.add_argument("--logging-directory", type=str, default=".temp")
