@@ -33,5 +33,6 @@ echo "[$(date)] Environment variables exported."
 echo "[$(date)] Starting Python script..."
 python -u 4_train_rnn_surrogate.py \
     --wandb-sweep-enable \
+    --data /data/small_dataset.ds \
     --logging-directory /scratch/$USER/wandb_logs \
     2>&1 | tee -a logs_slurm/sweep_non_spiking_$SLURM_JOB_ID.log
