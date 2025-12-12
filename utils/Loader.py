@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 import sys
-import tsaug
 sys.path.append(os.path.join(os.getcwd()))
 sys.path.append('../')
 

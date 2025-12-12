@@ -37,11 +37,25 @@ parser.add_argument('--NEG_Ln',                type=float,     default=4.0129,  
 parser.add_argument('--task',                  type=str,       default='temporized',          help='train normal pNN or split manufacturing, or temporal information')
 parser.add_argument('--DATASET',               type=int,       default=0,                     help='index of training dataset')
 parser.add_argument('--DataPath',              type=str,       default='./dataset',           help='path to dataset')
+parser.add_argument('--DS_VAR',                type=str,       default='none',                help='variation of dataset')
+parser.add_argument('--augment',               type=bool,      default=False,                 help='if needed data augmentation')
+
 # data augmentation
 parser.add_argument('--InputNoise',            type=float,     default=0.,                    help='noise of input signal')
 parser.add_argument('--IN_test',               type=float,     default=0.,                    help='noise of input signal for test')
 parser.add_argument('--R_train',               type=int,       default=1,                     help='number of sampling for input noise in training')
 parser.add_argument('--R_test',                type=int,       default=1,                     help='number of sampling for input noise in testing')
+parser.add_argument('--NOISE_LEVEL',               type=float,
+                    default=0.05,                    help='noise of input signal')
+parser.add_argument('--WARP_FACTOR',               type=float,
+                    default=0.1,                    help='noise of input signal')
+parser.add_argument('--SFR_down',               type=float,
+                    default=0.9,                    help='noise of input signal')
+parser.add_argument('--SFR_up',               type=float,
+                    default=1.1,                    help='noise of input signal')
+parser.add_argument('--CROP_SIZE',               type=int,
+                    default=50,                   help='noise of input signal')
+
 # temporal information processing
 parser.add_argument('--N_time',                type=int,       default=100,                   help='number of sampling for temporal information processing')
 # regularization
