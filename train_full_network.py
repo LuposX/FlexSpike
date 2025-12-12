@@ -147,12 +147,12 @@ def parse_args():
                          "'0,5,8', 'temporized:0-2, temporal:4', 'normal:3, 7'"))
     p.add_argument("--seed", type=int, default=42, help="SEED value")
     p.add_argument("--device", type=str, choices=["cpu", "gpu"], default="cpu", help="Device to use")
-    p.add_argument("--epochs", type=int, default=100, help="Number of training epochs (overrides config EPOCH)")
-    p.add_argument("--timelimit", type=float, default=0.1, help="TIMELIMITATION value")
+    p.add_argument("--epochs", type=int, default=200, help="Number of training epochs (overrides config EPOCH)")
+    p.add_argument("--timelimit", type=float, default=10, help="TIMELIMITATION value")
 
     # optimizer / lr
-    p.add_argument("--lr", type=float, default=0.1, help="Initial learning rate")
-    p.add_argument("--lr-min", type=float, default=5e-2, help="Minimum learning rate")
+    p.add_argument("--lr", type=float, default=0.001, help="Initial learning rate")
+    p.add_argument("--lr-min", type=float, default=1e-6, help="Minimum learning rate")
 
     # model topology
     p.add_argument("--hidden", type=int, nargs="*", default=None,

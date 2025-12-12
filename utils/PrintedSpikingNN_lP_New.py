@@ -59,7 +59,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                factor=getattr(self.args, "LR_DECAY", 0.1),
+                factor=getattr(self.args, "LR_DECAY", 0.001),
                 patience=getattr(self.args, "LR_PATIENCE", 5),
                 min_lr=getattr(self.args, "LR_MIN", 1e-8))
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
