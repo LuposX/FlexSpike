@@ -3,7 +3,7 @@
 train_rnn_fixed.py
 
 Example usage:
-python train_rnn_fixed.py --data ./data/dataset.ds --max-epochs 10 --batch-size 2048
+python train_rnn_fixed.py --data ./data/dataset.ds --max-epochs 10 --batch-size 2048 --train-samples 10000
 """
 
 import argparse
@@ -134,36 +134,36 @@ def main(args):
     logger.info("Loading dataset from %s", args.data)
     data = torch.load(args.data)
     logger.info("Loaded data keys: %s", list(data.keys()))
-    X_train, Y_train = data["X_train"], data["Y_train"]
+    X_train_full, Y_train_full = data["X_train"], data["Y_train"]
     X_valid, Y_valid = data["X_valid"], data["Y_valid"]
     X_test, Y_test = data["X_test"], data["Y_test"]
 
     logger.info("Shapes: X_train=%s, Y_train=%s, X_valid=%s, Y_valid=%s, X_test=%s, Y_test=%s",
-                getattr(X_train, 'shape', None), getattr(Y_train, 'shape', None),
+                getattr(X_train_full, 'shape', None), getattr(Y_train_full, 'shape', None),
                 getattr(X_valid, 'shape', None), getattr(Y_valid, 'shape', None),
                 getattr(X_test, 'shape', None), getattr(Y_test, 'shape', None))
 
     # infer num_inputs
     if getattr(args, "num_inputs", None) is None or args.num_inputs <= 0:
-        if X_train.ndim == 3:
-            inferred_num_inputs = X_train.shape[2]
-        elif X_train.ndim == 2:
+        if X_train_full.ndim == 3:
+            inferred_num_inputs = X_train_full.shape[2]
+        elif X_train_full.ndim == 2:
             inferred_num_inputs = 1
-            X_train = X_train.unsqueeze(-1)
+            X_train_full = X_train_full.unsqueeze(-1)
             X_valid = X_valid.unsqueeze(-1)
             X_test = X_test.unsqueeze(-1)
             logger.info("Expanded 2D inputs to 3D by unsqueezing last dim")
         else:
-            raise ValueError(f"Unexpected X_train shape: {X_train.shape}")
+            raise ValueError(f"Unexpected X_train shape: {X_train_full.shape}")
         args.num_inputs = inferred_num_inputs
         logger.info("Inferred num_inputs=%d from data", args.num_inputs)
 
-    train_dataset = torch.utils.data.TensorDataset(X_train, Y_train)
+    # Create validation and test datasets once (we may subsample train per-run)
     valid_dataset = torch.utils.data.TensorDataset(X_valid, Y_valid)
     test_dataset = torch.utils.data.TensorDataset(X_test, Y_test)
 
-    logger.info("Created datasets: train=%d, valid=%d, test=%d samples",
-                len(train_dataset), len(valid_dataset), len(test_dataset))
+    logger.info("Created datasets: valid=%d, test=%d samples",
+                len(valid_dataset), len(test_dataset))
 
     # Logging directory
     logging_directory = os.path.abspath(args.logging_directory)
@@ -294,6 +294,24 @@ def main(args):
             )
             callbacks.append(early_stopping_callback)
             logger.info("EarlyStopping enabled (patience=%s, delta=%s)", local_args.get("early_stopping_patience"), local_args.get("early_stopping_delta"))
+
+        # --- SUBSAMPLE TRAIN DATASET IF REQUESTED ---
+        requested = int(local_args.get("train_samples", 0))
+        total_train = X_train_full.size(0)
+        if requested <= 0 or requested >= total_train:
+            train_dataset = torch.utils.data.TensorDataset(X_train_full, Y_train_full)
+            logger.info("Using full training dataset (%d samples)", total_train)
+        else:
+            n = requested
+            logger.info("Subsampling training dataset: selecting %d/%d samples (seed=%d)", n, total_train, seed)
+            # Use torch.randperm with a generator seeded for reproducibility per-run
+            gen = torch.Generator()
+            gen.manual_seed(seed)
+            perm = torch.randperm(total_train, generator=gen)[:n]
+            X_sub = X_train_full[perm]
+            Y_sub = Y_train_full[perm]
+            train_dataset = torch.utils.data.TensorDataset(X_sub, Y_sub)
+            logger.info("Created subsampled train dataset with %d samples", len(train_dataset))
 
         logger.info("Instantiating model with num_hidden=%s, num_hidden_layers=%s, rnn_type=%s, lr=%s",
                     local_args.get("num_hidden"), local_args.get("num_hidden_layers"), local_args.get("rnn_type"), local_args.get("lr"))
@@ -477,6 +495,9 @@ if __name__ == "__main__":
     parser.add_argument("--early-stopping-delta", type=float, default=1e-4)
     parser.add_argument("--loss-fn", type=str, default="mse")
     parser.add_argument("--loss-kwargs", type=str, default="")
+
+    # NEW: allow training on a subset of the training data (0 = use all)
+    parser.add_argument("--train-samples", type=int, default=0, help="Number of random training samples to use. 0 (default) = use full training set.")
 
     parser.add_argument("--torch-compile", action="store_true")
     parser.add_argument("--use-gpu-if-available", action="store_true")

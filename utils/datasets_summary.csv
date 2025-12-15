@@ -1,0 +1,16 @@
+dataset,type,features,classes,input_shape,dtype,n_train_orig,n_valid_orig,n_test_orig,n_train_eff,n_valid_eff,n_test_eff,n_time,class_counts,nan_inf,file_size_bytes
+Dataset_acuteinflammation.ds,normal,6,2,"(6,)",torch.float32,70,23,25,7000,2300,2500,-,"[37, 33]",False,13319
+Dataset_balancescale.ds,normal,4,3,"(4,)",torch.float32,373,124,79,37300,12400,7900,-,"[28, 179, 166]",False,42311
+Dataset_breastcancerwisc.ds,normal,9,2,"(9,)",torch.float32,397,127,79,39700,12700,7900,-,"[258, 139]",False,78919
+Dataset_cardiotocography3clases.ds,normal,21,3,"(21,)",torch.float32,397,127,79,39700,12700,7900,-,"[314, 52, 31]",False,161927
+Dataset_energyy1.ds,normal,8,3,"(8,)",torch.float32,397,127,79,39700,12700,7900,-,"[189, 67, 141]",False,71943
+Dataset_cbf.tsds,temporal,1,3,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[104, 99, 97]",False,133911
+Dataset_distalphalanxtw.tsds,temporal,1,6,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[26, 24, 64, 26, 16, 144]",False,133911
+Dataset_freezerregulartrain.tsds,temporal,1,2,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[157, 143]",False,133911
+Dataset_gunpointagespan.tsds,temporal,1,2,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[152, 148]",False,120983
+Dataset_middlephalanxoutlineagegroup.tsds,temporal,1,2,"(1, 64)",torch.float32,270,90,91,27000,9000,9100,64,"[128, 142]",False,133911
+Dataset_mixedshapesregulartrain.tsds,temporal,1,2,"(1, 64)",torch.float32,270,90,91,27000,9000,9100,64,"[139, 131]",False,133911
+Dataset_powercons.tsds,temporal,1,2,"(1, 64)",torch.float32,270,90,91,27000,9000,9100,64,"[126, 144]",False,96919
+Dataset_proximalphalanxoutlinecorrect.tsds,temporal,1,3,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[48, 110, 142]",False,133911
+Dataset_selfregulationscp2.tsds,temporal,1,5,"(1, 64)",torch.float32,300,100,100,30000,10000,10000,64,"[54, 76, 52, 81, 37]",False,685911
+Dataset_slope.tsds,temporal,1,2,"(1, 64)",torch.float32,216,72,72,21600,7200,7200,64,"[108, 108]",False,133911
