@@ -81,6 +81,7 @@ def main(args):
     # Build model config
     model_config = GPT.get_default_config()
     model_config.model_type = args.model_type
+    model_config.n_extra_params = args.num_static_params
     # keep block_size from training data shape
     model_config.block_size = X_train.shape[1]
     model = GPTLightning(model_config, lr=args.lr, max_epochs=args.max_epochs)
@@ -183,6 +184,7 @@ if __name__ == "__main__":
 
     # Data and dataloader
     parser.add_argument("--data", type=str, default="./data/dataset.ds", help="Path to dataset (torch .pt/.ds) file.")
+    parser.add_argument("--num-static-params", type=int, default="6", help="Number static params the dataset has (V2 has 6, V3 has 0, V4 has 4).")
     parser.add_argument("--batch-size", type=int, default=2048, help="Batch size for all dataloaders.")
     parser.add_argument("--num-workers", type=int, default=4, help="num_workers for DataLoader.")
     parser.add_argument("--pin-memory", type=str2bool, default=False, help="Whether to use pin_memory in DataLoader (true/false).")

@@ -21,6 +21,7 @@ import wandb
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.utilities.model_summary import ModelSummary
 from pytorch_lightning import Trainer
 
 from typing import Dict, Any, Optional
@@ -338,6 +339,11 @@ def main(args):
             loss_kwargs=local_loss_kwargs,
             num_outputs=(int(local_args.get("num_outputs")) if int(local_args.get("num_outputs")) > 0 else None),
         )
+
+        summary = ModelSummary(model, max_depth=1)
+        num_params = summary.total_parameters
+        trainable_params = summary.trainable_parameters
+        logger.info("Model has %d trainable parameters (total %d)", trainable_params, num_params)
 
         # Log model parameter counts
         try:

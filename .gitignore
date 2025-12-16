@@ -12,6 +12,7 @@ wandb/*
 models/*
 surrogate/lightning_logs/*
 surrogate/pLSNN/*
+surrogate/models/*
 surrogate/wandb/*
 surrogate/.temp/*
 surrogate/data/small_dataset.ds

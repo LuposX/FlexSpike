@@ -90,7 +90,7 @@ class CausalSelfAttention(nn.Module):
 
         self.n_head = config.n_head
         self.n_embd = config.n_embd
-        self.n_extra_params = 6  # Store extra parameters count
+        self.n_extra_params = config.n_extra_params  # Store extra parameters count
 
         # Key, Query, Value projections
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
