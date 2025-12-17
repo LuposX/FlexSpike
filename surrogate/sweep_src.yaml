@@ -9,7 +9,7 @@ parameters:
     min: 1e-6
     max: 5e-2
   num_hidden:
-    values: [16, 64, 128, 256]
+    values: [16, 64, 128]
   beta:
     value: 0 # No effect for SRC instead chnage alpha
   surrogate_gradient:
@@ -23,7 +23,7 @@ parameters:
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
-    values: [2, 4, 6]
+    values: [2, 3, 4]
   temporal_skip:
     value: -1
   use_bntt:

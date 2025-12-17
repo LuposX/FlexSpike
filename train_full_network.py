@@ -34,6 +34,7 @@ from utils import FormulateArgs, MakeFolder, SetSeed
 from utils.Loader import GetDataLoader
 from utils.logger import GetMessageLogger
 import utils.training as training
+
 import utils.PrintedSpikingNN_lP_New as pSNN
 
 from surrogate.utils.spiking_architecture import SpikingNetwork
@@ -314,7 +315,10 @@ def main():
                 train_loader=train_loader,
                 valid_loader=valid_loader,
                 test_loader=test_loader,
-                surrogate_gradient=snn.surrogate.atan()
+                surrogate_gradient=snn.surrogate.atan(),
+                num_static_param=4, # How many static_paramater does the dataset have the surrogate model is trained on?
+                min_value_static_params=torch.tensor([0.0, 0.1, 0.15, 0.5]), # What are the minimum values of the static parmater from dataset the surrogate model was trained on 
+                max_value_static_params=torch.tensor([1.0, 1.0,  1.0, 1.0]), # What are the maximum values of the static parmater from dataset the surrogate model was trained on 
             )
             logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s)",
                         surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None))

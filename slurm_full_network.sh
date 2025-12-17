@@ -39,7 +39,7 @@ python -u train_full_network.py  \
     --epochs 100 \
     --lr 0.1 \ 
     --lr-min 5e-4 \
-    --hidden [2, 2] \
+    --hidden 5 5 \
     --surrogate-class x \ # Either: "baseline-gpt", "spiking" or "non-spiking"
     --surrogate-ckpt x \ # Path to checkpoint of the traiend surrogate
     --log-dir /scratch/$USER/wandb_logs

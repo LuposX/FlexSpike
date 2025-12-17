@@ -178,7 +178,6 @@ class GPT(nn.Module):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
         n_params = sum(p.numel() for p in self.transformer.parameters())
-        print("number of parameters: %.2fM" % (n_params / 1e6,))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):

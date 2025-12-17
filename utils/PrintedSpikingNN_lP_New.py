@@ -8,11 +8,10 @@ from typing import Any
 from utils.evaluation import Evaluator
 
 # ===============================================================================
-# ======================== Lightning Wrapper for PSNN ===========================
 # ===============================================================================
 
 class LightningPrintedSpikingNetwork(pl.LightningModule):
-    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, surrogate_gradient, loss_fn=None, train_dataset=None, valid_dataset=None):
+    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, surrogate_gradient, num_static_param, min_value_static_params, max_value_static_params, loss_fn=None, train_dataset=None, valid_dataset=None):
         super().__init__()
 
         if ckpt_path is None or ckpt_path == "" or not isinstance(ckpt_path, str):
@@ -29,7 +28,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn'])
 
         self.args = args
-        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset)
+        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params)
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
         self.loss_fn = loss_fn if loss_fn is not None else LFLoss(args)
@@ -130,9 +129,15 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
 
 class pSpikeGenerator(nn.Module):
-    def __init__(self, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset):
+    def __init__(self, args, model_class, ckpt_path, num_static_param, surrogate_gradient, train_dataset, valid_dataset, min_value_static_params, max_value_static_params):
         super().__init__()
         self.args = args
+
+        # Validate num_static_param early
+        if not (isinstance(num_static_param, int) or (isinstance(num_static_param, torch.Tensor) and num_static_param.numel()==1)):
+            raise TypeError(f"num_static_param must be an int (number of static params). Got: {type(num_static_param)}")
+
+        self.num_static_param = int(num_static_param)
 
         # Load frozen spike generator
         self.spike_generator = model_class.load_from_checkpoint(
@@ -142,22 +147,26 @@ class pSpikeGenerator(nn.Module):
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
         )
-
         
         self.spike_generator.train(False)
         for param in self.spike_generator.parameters():
             param.requires_grad = False
 
-        # Define raw trainable parameters (unconstrained)
-        self.raw_params = nn.Parameter(torch.randn(1, 6))
+        # Define raw trainable parameters (unconstrained) on correct device
+        self.raw_params = nn.Parameter(torch.randn(1, self.num_static_param, device=self.DEVICE))
 
-        # Define target per-parameter ranges (shape: (6,))
-        self.low = torch.tensor([0.1, 0.1, 0.1, 0.4, 0.4, 0.6], device=self.DEVICE)
-        self.high = torch.tensor([1.0, 1.0,  1.0, 1.0, 1.0,  1.0], device=self.DEVICE)
+        # Ensure min/max are tensors on the right device and shaped (num_static_param,)
+        self.low = (min_value_static_params.clone().detach().to(self.DEVICE).view(-1)) 
+        self.high = (max_value_static_params.clone().detach().to(self.DEVICE).view(-1))
+
+        if self.low.numel() != self.num_static_param or self.high.numel() != self.num_static_param:
+            raise ValueError(f"min/max vectors must have length {self.num_static_param}; got {self.low.numel()}/{self.high.numel()}")
 
     @property
     def DEVICE(self):
-        return self.args.DEVICE
+        # expect args.DEVICE to be a torch.device or compatible string
+        return torch.device(self.args.DEVICE) if isinstance(self.args.DEVICE, str) else self.args.DEVICE
+
 
     def transform_params(self):
         # Apply tanh transformation and scale to [low, high] for each parameter
@@ -189,11 +198,24 @@ class pSpikeGenerator(nn.Module):
 # ===============================================================================
 
 class SGLayer(torch.nn.Module):
-    def __init__(self, N, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset):
+    def __init__(self, N, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
         super().__init__()
         self.args = args
+        # corrected: num_static_param must come before surrogate_gradient
         self.SG_Group = torch.nn.ModuleList(
-            [pSpikeGenerator(args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset) for _ in range(N)])
+            [pSpikeGenerator(
+                 args,
+                 model_class,
+                 ckpt_path,
+                 num_static_param,
+                 surrogate_gradient,
+                 train_dataset,
+                 valid_dataset,
+                 min_value_static_params,
+                 max_value_static_params
+             ) for _ in range(N)]
+        )
+
 
     @property
     def DEVICE(self):
@@ -228,11 +250,11 @@ class Inv(torch.nn.Module):
 # ===============================================================================
 
 class pLayer(torch.nn.Module):
-    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset):
+    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
         super().__init__()
         self.args = args
         # define spike generators
-        self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset)
+        self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params)
         # define nonlinear circuits
         self.INV = INV
         # initialize conductances for weights
@@ -347,7 +369,7 @@ class pLayer(torch.nn.Module):
 
 
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
-    def __init__(self, topology, args, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset):
+    def __init__(self, topology, args, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
         super().__init__()
         self.args = args
 
@@ -355,7 +377,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
 
         self.model = torch.nn.Sequential()
         for i in range(len(topology)-1):
-            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset))
+            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params))
 
     @property
     def DEVICE(self):
