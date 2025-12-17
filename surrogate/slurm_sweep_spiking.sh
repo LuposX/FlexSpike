@@ -32,7 +32,7 @@ echo "[$(date)] Environment variables exported."
 
 # Run the sweep with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
-python -u 3_hyperparameter_search_rsnn.py \
+python -u 3_hyperparameter_search_spiking_network.py \
     --sweep-config sweep_src.yaml \
     --project SpikeSynth-Surrogate-Sweep \
     --logging-directory /scratch/$USER/wandb_logs

@@ -31,7 +31,7 @@ echo "[$(date)] Environment variables exported."
 
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
-python -u 4_train_rnn_surrogate.py \
+python -u 4_train_non_spiking_surrogate.py \
     --wandb-sweep-enable \
     --data /data/small_dataset.ds \
     --logging-directory /scratch/$USER/wandb_logs \

@@ -33,6 +33,7 @@ class SpikingNetwork(L.LightningModule):
                  scheduler_class,
                  log_every_n_steps,
                  use_layernorm,
+                 num_static_params,
                  neuron_type="LeakyParallel",
                  scheduler_kwargs=None,
                  bntt_time_steps=None,
@@ -61,6 +62,9 @@ class SpikingNetwork(L.LightningModule):
 
             optimizer_class (type): 
                 Optimizer class to use (e.g., `torch.optim.Adam`, `torch.optim.SGD`).
+
+            num_static_params (int):
+                How many static paramater the dataset used, V2 uses 6, V3 uses 0 and V4 uses 4.
 
             neuron_type: str, one of {"LeakyParallel", "Leaky", "SLSTM"}
                "LeakyParallel" uses snn.LeakyParallel and accepts a full (T,B,F) sequence. 
@@ -133,7 +137,7 @@ class SpikingNetwork(L.LightningModule):
         """  
         super().__init__()
 
-        self.num_params = 6
+        self.num_params = num_static_params
         self.num_inputs = 1
         self.num_outputs = self.num_inputs
         self.train_dataset = train_dataset

@@ -31,20 +31,17 @@ echo "[$(date)] Environment variables exported."
 
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
-python -u 4_train_rnn_surrogate.py  \
+python -u 4_train_non_spiking_surrogate.py  \
     --project-name surrogate-confidence \
     --experiment-name RNN \
     --max-epochs 80 \
     --layer-skip 0 \
-    --beta 0 \
     --batch-size 2048 \
     --num-hidden 64 \
     --num-hidden-layers 4 \
-    --rnn-type "RNN" \
+    --rnn-type "rnn" \
     --num-runs 3 \
-    --use-layernorm False \
-    --use-bntt False \
     --early-stopping-patience 20 \
     --loss-fn "mse" \
-    --lr 0.1 \
+    --lr 0.005 \
     --logging-directory /scratch/$USER/wandb_logs

@@ -211,6 +211,7 @@ def main(args):
             temporal_skip=args.temporal_skip,
             layer_skip=args.layer_skip,
             use_bntt=args.use_bntt,
+            num_static_params=args.num_static_params,
             neuron_type=args.neuron_type,
             bntt_time_steps=args.bntt_time_steps,
             log_every_n_steps=args.log_every_n_steps,
@@ -264,6 +265,7 @@ if __name__ == "__main__":
 
     # General and Monitoring
     parser.add_argument("--data", type=str, default="./data/dataset.ds", help="Path to dataset (torch file).")
+    parser.add_argument("--num-static-params", type=int, default=6, help="Number of static paramater the dataset has.  V2 uses 6, V3 uses 0 and V4 uses 4.")
     parser.add_argument("--experiment-name", type=str, default="test", help="WandB experiment/run name.")
     parser.add_argument("--project-name", type=str, default="Spike-Synth-Surrogate", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
