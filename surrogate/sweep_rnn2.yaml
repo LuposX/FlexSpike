@@ -1,5 +1,5 @@
 # sweep_rnn.yaml
-name: "Sweep_GRU"
+name: "Sweep_RNN"
 method: random            # random | grid | bayes
 metric:
   name: val_loss
@@ -8,7 +8,7 @@ metric:
 parameters:
   # model architecture
   rnn_type:
-    value: "gru"
+    value: "rnn"
   num_hidden:
     values: [16, 32, 64, 128]
   num_hidden_layers:

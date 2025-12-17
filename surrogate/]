@@ -1,5 +1,5 @@
 method: random
-name: "Sweep_SRC"
+name: "SweepRC"
 metric:
   name: val_loss
   goal: minimize
@@ -19,7 +19,7 @@ parameters:
   dropout:
     value: 0
   batch_size:
-    values: [32, 256, 2048]
+    value: 2048
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
@@ -39,7 +39,7 @@ parameters:
   scheduler_kwargs:
     value: ""
   data_path:
-    value: "./data/dataset_v4.ds"
+    value: "./data/small_dataset.ds"
   epochs:
     value: 50
   loss_fn:
