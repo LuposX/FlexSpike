@@ -320,6 +320,7 @@ def main(args):
             num_hidden_layers=int(local_args.get("num_hidden_layers")),
             num_hidden=int(local_args.get("num_hidden")),
             rnn_type=local_args.get("rnn_type"),
+            num_static_params=ocal_args.get("num_static_params"),
             optimizer_class=local_optimizer_class,
             optimizer_kwargs=local_optimizer_kwargs,
             lr=float(local_args.get("lr")),
