@@ -32,14 +32,14 @@ echo "[$(date)] Environment variables exported."
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
 python -u train_full_network.py  \
-    --project Spike-Synth-Full \
-    --experiment FullNetwork \
-    --datasets "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12"
-    --timelimit 10 \ # maximal running time (in hour)
-    --epochs 100 \
-    --lr 0.1 \ 
-    --lr-min 5e-4 \
-    --hidden 5 5 \
-    --surrogate-class x \ # Either: "baseline-gpt", "spiking" or "non-spiking"
-    --surrogate-ckpt x \ # Path to checkpoint of the traiend surrogate
-    --log-dir /scratch/$USER/wandb_logs
+            --project flexible-printed-network \
+            --experimen PSNN_wSurrGPT_wFaults \
+            --timelimit 10 \
+            --epochs 200 \
+            --lr 0.1 \
+            --lr-min 5e-5 \
+            --hidden 5 5 \
+            --surrogate-class "baseline-gpt" \  # Either: "baseline-gpt", "spiking" or "non-spiking"
+            --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano-gpt-nano-epoch=192-val_loss=0.42.ckpt \
+            --fault-prob 0.2 \
+            --faulty-surrogates surrogate/models/BaselineGPT/

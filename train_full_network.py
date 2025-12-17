@@ -172,7 +172,19 @@ def parse_args():
     p.add_argument("--progressive", action="store_true", help="Set PROGRESSIVE flag")
     p.add_argument("--fast-dev-run", action="store_true", help="Run lightning in fast_dev_run mode (debug)")
     p.add_argument("--stop-on-error", action="store_true", help="Stop on first dataset error (default: continue to next dataset)")
-    p.add_argument("--fault-injection", type=str, default="NoFaultInj", help="Fault injection.")
+
+    # Provide multiple faulty surrogate checkpoints as comma-separated string:
+    p.add_argument("--faulty-surrogates", type=str, default="",
+                   help="Comma-separated list of checkpoint paths for faulty surrogate models. E.g. '/path/f1.ckpt,/path/f2.ckpt'")
+
+    # Fault probability (dropout-like) per neuron during training/eval (0 disables)
+    p.add_argument("--fault-prob", type=float, default=0.0,
+                   help="Per-neuron probability to replace a clean surrogate with a faulty one during forward passes (dropout-like). 0 disables fault-aware training.")
+
+    # Test-time sweep: comma-separated list of fault probabilities to run tests with
+    p.add_argument("--test-fault-levels", type=str, default="0.0,0.1,0.2,0.3,0.4,0.5",
+                   help="Optional comma-separated list of fault probabilities to evaluate at test time. Example: '0.0,0.05,0.1'. If empty, defaults to [0.0, fault_prob].")
+    # --------------------------------------------------------------------
 
     return p.parse_args()
 
@@ -301,6 +313,30 @@ def main():
         else:
             surrogate_class = NonSpikingNetwork
 
+        if args_cli.faulty_surrogates:
+            faulty_ckpts_list = [p.strip() for p in args_cli.faulty_surrogates.split(",") if p.strip()]
+        else:
+            faulty_ckpts_list = []
+
+        # parse test fault-levels as list of floats if provided
+        if args_cli.test_fault_levels:
+            try:
+                test_fault_levels = sorted({float(x.strip()) for x in args_cli.test_fault_levels.split(",") if x.strip()})
+            except ValueError:
+                logger.exception("Could not parse --test-fault-levels '%s'", args_cli.test_fault_levels)
+                test_fault_levels = None
+        else:
+            test_fault_levels = None
+
+        # place parsed test levels into args for the model to read (pSNN.UpdateArgs / test sweep expects args.test_fault_levels)
+        if test_fault_levels is not None:
+            setattr(args, "test_fault_levels", test_fault_levels)
+
+        # warn if user enabled fault_prob but provided no faulty surrogates
+        if args_cli.fault_prob > 0.0 and len(faulty_ckpts_list) == 0:
+            logger.warning("User set --fault-prob=%s but provided no --faulty-surrogates. Fault injection will be a no-op.", args_cli.fault_prob)
+
+
         # instantiate the model wrapper
         surrogate_ckpt = args_cli.surrogate_ckpt
         hidden_list = args.hidden if getattr(args, "hidden", None) else []
@@ -319,6 +355,8 @@ def main():
                 num_static_param=4, # How many static_paramater does the dataset have the surrogate model is trained on?
                 min_value_static_params=torch.tensor([0.0, 0.1, 0.15, 0.5]), # What are the minimum values of the static parmater from dataset the surrogate model was trained on 
                 max_value_static_params=torch.tensor([1.0, 1.0,  1.0, 1.0]), # What are the maximum values of the static parmater from dataset the surrogate model was trained on 
+                faulty_ckpt_paths=faulty_ckpts_list,
+                fault_prob=args_cli.fault_prob,
             )
             logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s)",
                         surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None))
@@ -331,7 +369,7 @@ def main():
                 continue
 
         # WandB logger: include dataset id and task in run name to keep separate runs
-        run_name = f"{args_cli.experiment}_{args_cli.fault_injection}_{datainfo['dataname']}"
+        run_name = f"{args_cli.experiment}_FaultProb{args_cli.fault_prob}_{datainfo['dataname']}"
         logger.info("Setting up WandB logger (project=%s, run=%s) (dataset=%s task=%s)", args_cli.project, run_name, dset, getattr(args, "task", None))
         wandb_logger = WandbLogger(
             log_model=True,

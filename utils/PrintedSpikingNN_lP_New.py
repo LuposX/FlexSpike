@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
-from typing import Any
+from typing import Any, List, Optional
 
 from utils.evaluation import Evaluator
 
@@ -11,7 +11,23 @@ from utils.evaluation import Evaluator
 # ===============================================================================
 
 class LightningPrintedSpikingNetwork(pl.LightningModule):
-    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, surrogate_gradient, num_static_param, min_value_static_params, max_value_static_params, loss_fn=None, train_dataset=None, valid_dataset=None):
+    def __init__(self,
+                 topology,
+                 args,
+                 model_class,
+                 ckpt_path: str,
+                 train_loader,
+                 valid_loader,
+                 test_loader,
+                 surrogate_gradient,
+                 num_static_param: int,
+                 min_value_static_params,
+                 max_value_static_params,
+                 loss_fn=None,
+                 train_dataset=None,
+                 valid_dataset=None,
+                 faulty_ckpt_paths: Optional[List[str]] = None,  # list of faulty surrogate ckpts
+                 fault_prob: float = 0.0):                         # dropout-like probability
         super().__init__()
 
         if ckpt_path is None or ckpt_path == "" or not isinstance(ckpt_path, str):
@@ -24,11 +40,25 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             raise FileNotFoundError(
                 f"Checkpoint file not found: {ckpt_path}"
             )
-        
-        self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn'])
+
+        if fault_prob > 0.0 and len(faulty_ckpt_paths) == 0:
+            print("Warning: fault_prob > 0 but no faulty surrogate checkpoints were provided. Fault injection is disabled.")
+
+        # Save hyperparameters (ignore heavy objects)
+        self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn',
+                                          'train_loader', 'valid_loader', 'test_loader'])
+
+        # Add fault config into args for downstream modules to read
+        setattr(args, "fault_prob", float(fault_prob))
+        setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
 
         self.args = args
-        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params)
+        self.network = PrintedSpikingNeuralNetwork(
+            topology, args, model_class, ckpt_path,
+            surrogate_gradient, train_dataset, valid_dataset,
+            num_static_param, min_value_static_params, max_value_static_params,
+            faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=fault_prob
+        )
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
         self.loss_fn = loss_fn if loss_fn is not None else LFLoss(args)
@@ -37,9 +67,6 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.evaluator = Evaluator(args)
 
         num_classes = topology[-1]
-        #self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-        #self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
@@ -105,6 +132,61 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         return {"test_loss": loss}
 
+    def test_epoch_end(self, outputs):
+        """
+        After the normal test epoch, run additional evaluations (sweep) with different
+        fault probabilities. Logs metrics for each fault level.
+        """
+        # default fault level list: 0.0 and the training-level fault_prob
+        orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
+        configured_levels = getattr(self.args, "test_fault_levels", None)
+
+        if configured_levels is None:
+            levels = sorted(set([0.0, float(orig_fault_prob)]))
+        else:
+            levels = sorted(set([float(l) for l in configured_levels]))
+
+        # helper to evaluate the whole test_loader with a given fault probability
+        def evaluate_with_prob(p):
+            # temporarily set fault probability
+            setattr(self.args, "fault_prob", float(p))
+            # ensure modules that read args get updated
+            if hasattr(self.network, "UpdateArgs"):
+                self.network.UpdateArgs(self.args)
+
+            self.network.eval()
+            acc_sum = 0.0
+            power_sum = 0.0
+            total_samples = 0
+
+            with torch.no_grad():
+                for xb, yb in self.test_loader:
+                    xb = xb.to(self.network.DEVICE) if isinstance(self.network.DEVICE, torch.device) else xb.to(self.args.DEVICE)
+                    yb = yb.to(self.network.DEVICE) if isinstance(self.network.DEVICE, torch.device) else yb.to(self.args.DEVICE)
+                    batch_acc, batch_power = self.evaluator(self.network, xb, yb)
+                    batch_n = xb.shape[0]
+                    acc_sum += float(batch_acc) * batch_n
+                    power_sum += float(batch_power) * batch_n
+                    total_samples += batch_n
+
+            mean_acc = acc_sum / (total_samples + 1e-12)
+            mean_power = power_sum / (total_samples + 1e-12)
+            return mean_acc, mean_power
+
+        # Run sweep and log
+        for p in levels:
+            mean_acc, mean_power = evaluate_with_prob(p)
+            tag = f"test_acc_fault_{int(p*100)}"
+            tag_power = f"test_power_fault_{int(p*100)}"
+            # log scalars
+            self.log(tag, mean_acc, prog_bar=True, on_epoch=True)
+            self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
+
+        # restore original
+        setattr(self.args, "fault_prob", float(orig_fault_prob))
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(self.args)
+
     
     def UpdateArgs(self, args):
         """Keep compatibility with the original code."""
@@ -129,7 +211,18 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
 
 class pSpikeGenerator(nn.Module):
-    def __init__(self, args, model_class, ckpt_path, num_static_param, surrogate_gradient, train_dataset, valid_dataset, min_value_static_params, max_value_static_params):
+    def __init__(self,
+                 args,
+                 model_class,
+                 ckpt_path: str,
+                 num_static_param,
+                 surrogate_gradient,
+                 train_dataset,
+                 valid_dataset,
+                 min_value_static_params,
+                 max_value_static_params,
+                 faulty_ckpt_paths: Optional[List[str]] = None,
+                 fault_prob: float = 0.0):
         super().__init__()
         self.args = args
 
@@ -139,7 +232,7 @@ class pSpikeGenerator(nn.Module):
 
         self.num_static_param = int(num_static_param)
 
-        # Load frozen spike generator
+        # Load the *clean* spike generator
         self.spike_generator = model_class.load_from_checkpoint(
             ckpt_path,
             map_location=self.DEVICE,
@@ -147,10 +240,30 @@ class pSpikeGenerator(nn.Module):
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
         )
-        
         self.spike_generator.train(False)
         for param in self.spike_generator.parameters():
             param.requires_grad = False
+
+        # Load faulty surrogates (if provided)
+        self.faulty_spike_generators = torch.nn.ModuleList()
+        faulty_ckpt_paths = faulty_ckpt_paths or getattr(args, "faulty_ckpt_paths", []) or []
+        for fpath in faulty_ckpt_paths:
+            if not os.path.isfile(fpath):
+                raise FileNotFoundError(f"Faulty surrogate checkpoint not found: {fpath}")
+            fgen = model_class.load_from_checkpoint(
+                fpath,
+                map_location=self.DEVICE,
+                surrogate_gradient=surrogate_gradient,
+                train_dataset=train_dataset,
+                valid_dataset=valid_dataset,
+            )
+            fgen.train(False)
+            for param in fgen.parameters():
+                param.requires_grad = False
+            self.faulty_spike_generators.append(fgen)
+
+        # fault probability (per-neuron replacement prob)
+        self.fault_prob = float(fault_prob) if fault_prob is not None else float(getattr(args, "fault_prob", 0.0))
 
         # Define raw trainable parameters (unconstrained) on correct device
         self.raw_params = nn.Parameter(torch.randn(1, self.num_static_param, device=self.DEVICE))
@@ -164,33 +277,48 @@ class pSpikeGenerator(nn.Module):
 
     @property
     def DEVICE(self):
-        # expect args.DEVICE to be a torch.device or compatible string
         return torch.device(self.args.DEVICE) if isinstance(self.args.DEVICE, str) else self.args.DEVICE
 
-
     def transform_params(self):
-        # Apply tanh transformation and scale to [low, high] for each parameter
-        # raw_params shape: (1, 6) → transformed_params shape: (1, 6)
         r = (self.high - self.low) / 2
         c = (self.high + self.low) / 2
         return c + r * torch.tanh(self.raw_params)
 
     def forward(self, x):
-        batch_size = x.shape[0]
-        T = x.shape[2]
+        # Decide whether to use faulty surrogate for this neuron
+        # Use probability from args if present (so test sweeps can change it)
+        fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
+        use_fault = False
+        if fault_p > 0.0 and len(self.faulty_spike_generators) > 0:
+            # decide per-module (neuron) — consistent across batch (like standard dropout)
+            # but if you prefer per-sample decision change the sampling logic
+            if torch.rand(1).item() < fault_p:
+                use_fault = True
+
+        # pick spike generator to run
+        spike_gen = None
+        if use_fault:
+            idx = torch.randint(len(self.faulty_spike_generators), (1,)).item()
+            spike_gen = self.faulty_spike_generators[idx]
+        else:
+            spike_gen = self.spike_generator
 
         # Transform and expand trainable parameters
-        extra_params = self.transform_params()  # (1, 6)
-        #print(extra_params)
-        expanded_params = extra_params.expand(batch_size, -1)  # (B, 6)
-        expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, 6, T)
+        batch_size = x.shape[0]
+        T = x.shape[2]
+        extra_params = self.transform_params()  # (1, num_static_param)
+        expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param)
+        expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param, T)
 
         # Concatenate with input
-        x = torch.cat([x, expanded_params], dim=1)  # (B, C+6, T)
-        return self.spike_generator(x)
+        x = torch.cat([x, expanded_params], dim=1)  # (B, C+num_static_param, T)
+
+        return spike_gen(x)
 
     def UpdateArgs(self, args):
         self.args = args
+        # refresh fault probability from args (if changed)
+        self.fault_prob = float(getattr(args, "fault_prob", self.fault_prob))
 
 
 # ===============================================================================
@@ -198,10 +326,21 @@ class pSpikeGenerator(nn.Module):
 # ===============================================================================
 
 class SGLayer(torch.nn.Module):
-    def __init__(self, N, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
+    def __init__(self,
+                 N,
+                 args,
+                 model_class,
+                 ckpt_path,
+                 surrogate_gradient,
+                 train_dataset,
+                 valid_dataset,
+                 num_static_param,
+                 min_value_static_params,
+                 max_value_static_params,
+                 faulty_ckpt_paths: Optional[List[str]] = None,
+                 fault_prob: float = 0.0):
         super().__init__()
         self.args = args
-        # corrected: num_static_param must come before surrogate_gradient
         self.SG_Group = torch.nn.ModuleList(
             [pSpikeGenerator(
                  args,
@@ -212,10 +351,11 @@ class SGLayer(torch.nn.Module):
                  train_dataset,
                  valid_dataset,
                  min_value_static_params,
-                 max_value_static_params
+                 max_value_static_params,
+                 faulty_ckpt_paths=faulty_ckpt_paths,
+                 fault_prob=fault_prob
              ) for _ in range(N)]
         )
-
 
     @property
     def DEVICE(self):
@@ -226,10 +366,14 @@ class SGLayer(torch.nn.Module):
         for n in range(len(self.SG_Group)):
             x_temp = x[:, n, :].unsqueeze(-1)
             result.append(self.SG_Group[n](x_temp))
+        # result is list length N with each item (B, C_out, T); stacking and permute as before
         return torch.stack(result).permute(1, 0, 2)
 
     def UpdateArgs(self, args):
         self.args = args
+        for sg in self.SG_Group:
+            if hasattr(sg, "UpdateArgs"):
+                sg.UpdateArgs(args)
 
 
 # ===============================================================================
@@ -250,17 +394,27 @@ class Inv(torch.nn.Module):
 # ===============================================================================
 
 class pLayer(torch.nn.Module):
-    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
+    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path, surrogate_gradient,
+                 train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
+                 faulty_ckpt_paths: Optional[List[str]] = None, fault_prob: float = 0.0):
         super().__init__()
         self.args = args
-        # define spike generators
-        self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params)
-        # define nonlinear circuits
+        self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient,
+                          train_dataset, valid_dataset, num_static_param,
+                          min_value_static_params, max_value_static_params,
+                          faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=fault_prob)
         self.INV = INV
-        # initialize conductances for weights
+
         theta = torch.rand([n_in + 2, n_out])/10. + args.gmin
         theta[-2, :] = args.gmax - theta[-2, :]
         self.theta_ = torch.nn.Parameter(theta, requires_grad=True)
+
+    # rest of pLayer unchanged (properties, MAC, MACPower etc.)
+    # ensure UpdateArgs forwards to SG
+    def UpdateArgs(self, args):
+        self.args = args
+        if hasattr(self, "SG") and hasattr(self.SG, "UpdateArgs"):
+            self.SG.UpdateArgs(args)
 
     @property
     def device(self):
@@ -360,8 +514,6 @@ class pLayer(torch.nn.Module):
         Power = Power / E
         return Power
 
-    def UpdateArgs(self, args):
-        self.args = args
 
 # ===============================================================================
 # ======================== Printed Neural Network ===============================
@@ -369,7 +521,9 @@ class pLayer(torch.nn.Module):
 
 
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
-    def __init__(self, topology, args, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params):
+    def __init__(self, topology, args, model_class, ckpt_path, surrogate_gradient,
+                 train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
+                 faulty_ckpt_paths: Optional[List[str]] = None, fault_prob: float = 0.0):
         super().__init__()
         self.args = args
 
@@ -377,7 +531,25 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
 
         self.model = torch.nn.Sequential()
         for i in range(len(topology)-1):
-            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params))
+            self.model.add_module(
+                str(i) + '_pLayer',
+                pLayer(
+                    topology[i],
+                    topology[i+1],
+                    args,
+                    self.INV,
+                    model_class,
+                    ckpt_path,
+                    surrogate_gradient,
+                    train_dataset,
+                    valid_dataset,
+                    num_static_param,
+                    min_value_static_params,
+                    max_value_static_params,
+                    faulty_ckpt_paths=faulty_ckpt_paths,
+                    fault_prob=fault_prob
+                )
+            )
 
     @property
     def DEVICE(self):
