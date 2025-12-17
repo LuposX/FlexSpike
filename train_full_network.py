@@ -150,6 +150,42 @@ def parse_args():
     p.add_argument("--device", type=str, choices=["cpu", "gpu"], default="cpu", help="Device to use")
     p.add_argument("--epochs", type=int, default=200, help="Number of training epochs (overrides config EPOCH)")
     p.add_argument("--timelimit", type=float, default=10, help="TIMELIMITATION value")
+        # static-parameter specification (main vs faulty)
+    p.add_argument(
+        "--num-static-param",
+        type=str,
+        default="4,0",
+        help=(
+            "Number of static params. Either single int '4' (used for both main+faulty) "
+            "or pair '4,6' meaning main=4,faulty=6."
+        ),
+    )
+    p.add_argument(
+        "--min-static-main",
+        type=str,
+        default=torch.tensor([0.0, 0.1, 0.15, 0.5]),
+        help="Comma-separated list of minimum static-param values for the main surrogate (e.g. '0.0,0.1,0.2'). "
+             "If omitted, defaults to zeros of length num-static-param (main).",
+    )
+    p.add_argument(
+        "--max-static-main",
+        type=str,
+        default=torch.tensor([1.0, 1.0,  1.0, 1.0]),
+        help="Comma-separated list of maximum static-param values for the main surrogate. If omitted, defaults to ones.",
+    )
+    p.add_argument(
+        "--min-static-faulty",
+        type=str,
+        default=None,
+        help="Comma-separated list of minimum static-param values for the faulty surrogate. If omitted, main values are reused (expanded/truncated if lengths differ).",
+    )
+    p.add_argument(
+        "--max-static-faulty",
+        type=str,
+        default=None,
+        help="Comma-separated list of maximum static-param values for the faulty surrogate. If omitted, main values are reused (expanded/truncated if lengths differ).",
+    )
+
 
     # optimizer / lr
     p.add_argument("--lr", type=float, default=0.001, help="Initial learning rate")
@@ -336,6 +372,139 @@ def main():
         if args_cli.fault_prob > 0.0 and len(faulty_ckpts_list) == 0:
             logger.warning("User set --fault-prob=%s but provided no --faulty-surrogates. Fault injection will be a no-op.", args_cli.fault_prob)
 
+        
+        # ---------------------------
+        # parse static-param CLI input
+        # ---------------------------
+                # ---------------------------
+        # Robust static-param parsing
+        # ---------------------------
+        def _csv_to_floats(s):
+            """Return a python list of floats or None. Accepts str, list/tuple, or torch.Tensor."""
+            if s is None:
+                return None
+            # torch tensor -> convert to list
+            if isinstance(s, torch.Tensor):
+                return [float(x) for x in s.detach().cpu().view(-1).tolist()]
+            # list/tuple -> convert elements to float
+            if isinstance(s, (list, tuple)):
+                return [float(x) for x in s]
+            # string -> split on commas
+            if isinstance(s, str):
+                parts = [tok.strip() for tok in s.split(",") if tok.strip()]
+                return [float(x) for x in parts]
+            # single numeric value (int/float)
+            if isinstance(s, (int, float)):
+                return [float(s)]
+            raise TypeError(f"Unsupported type for static-param vector: {type(s)}. Value: {s}")
+
+        def _maybe_tensor_from_input(inp, expected_len: int = None):
+            """
+            Convert input (str/list/torch.Tensor/None) into torch.Tensor or None.
+            If expected_len is provided, will raise ValueError if lengths mismatch.
+            """
+            if inp is None:
+                return None
+            vals = _csv_to_floats(inp)
+            t = torch.tensor(vals, dtype=torch.float32)
+            if expected_len is not None and t.numel() != expected_len:
+                raise ValueError(f"Expected length {expected_len} but got {t.numel()} for vector {inp!r}")
+            return t
+
+        def _broadcast_or_trim(t_src: torch.Tensor, target_len: int) -> torch.Tensor:
+            """If t_src shorter, repeat last element; if longer, trim. Returns tensor on CPU float32."""
+            if t_src is None:
+                # default to zeros
+                return torch.zeros(target_len, dtype=torch.float32)
+            src = t_src.clone().detach().view(-1).float().cpu()
+            src_len = int(src.numel())
+            if src_len == target_len:
+                return src
+            if src_len < target_len:
+                if src_len == 0:
+                    return torch.zeros(target_len, dtype=src.dtype)
+                last = float(src[-1].item())
+                extra = torch.tensor([last] * (target_len - src_len), dtype=src.dtype)
+                return torch.cat([src, extra], dim=0)
+            # src_len > target_len -> trim
+            return src[:target_len]
+
+        # parse num-static-param: accept "4" or "4,6" or list/tuple or torch.Tensor
+        if isinstance(args_cli.num_static_param, str) and "," in args_cli.num_static_param:
+            parts = [int(x.strip()) for x in args_cli.num_static_param.split(",")]
+            if len(parts) != 2:
+                raise ValueError("--num-static-param must be a single int or two ints separated by a comma (main,faulty)")
+            num_main, num_faulty = parts
+            num_static_param_arg = (num_main, num_faulty)
+        elif isinstance(args_cli.num_static_param, (list, tuple, torch.Tensor)):
+            # list/tuple/tensor e.g., [4,6] or tensor([4,6])
+            if isinstance(args_cli.num_static_param, torch.Tensor):
+                arr = args_cli.num_static_param.detach().cpu().view(-1).tolist()
+                parts = [int(x) for x in arr]
+            else:
+                parts = [int(x) for x in args_cli.num_static_param]
+            if len(parts) == 1:
+                num_static_param_arg = parts[0]
+            elif len(parts) == 2:
+                num_static_param_arg = (parts[0], parts[1])
+            else:
+                raise ValueError("--num-static-param as list/tuple must have length 1 or 2 (main[,faulty])")
+        else:
+            # single int like "4" or numeric
+            num_static_param_arg = int(args_cli.num_static_param)
+
+        # determine num_main / num_faulty as integers
+        if isinstance(num_static_param_arg, tuple):
+            num_main, num_faulty = num_static_param_arg
+        else:
+            num_main = num_static_param_arg
+            num_faulty = num_main
+
+        # parse main min/max (accept many input forms)
+        t_min_main = _maybe_tensor_from_input(args_cli.min_static_main, expected_len=None)
+        t_max_main = _maybe_tensor_from_input(args_cli.max_static_main, expected_len=None)
+
+        # fallback defaults
+        if t_min_main is None:
+            t_min_main = torch.zeros(num_main, dtype=torch.float32)
+        if t_max_main is None:
+            t_max_main = torch.ones(num_main, dtype=torch.float32)
+
+        # validate or broadcast main to num_main
+        if t_min_main.numel() != num_main:
+            t_min_main = _broadcast_or_trim(t_min_main, num_main)
+        if t_max_main.numel() != num_main:
+            t_max_main = _broadcast_or_trim(t_max_main, num_main)
+
+        # parse faulty min/max if provided; else reuse/broadcast main
+        t_min_faulty = _maybe_tensor_from_input(args_cli.min_static_faulty, expected_len=None)
+        t_max_faulty = _maybe_tensor_from_input(args_cli.max_static_faulty, expected_len=None)
+
+        if t_min_faulty is None:
+            t_min_faulty = _broadcast_or_trim(t_min_main, num_faulty)
+        else:
+            if t_min_faulty.numel() != num_faulty:
+                t_min_faulty = _broadcast_or_trim(t_min_faulty, num_faulty)
+
+        if t_max_faulty is None:
+            t_max_faulty = _broadcast_or_trim(t_max_main, num_faulty)
+        else:
+            if t_max_faulty.numel() != num_faulty:
+                t_max_faulty = _broadcast_or_trim(t_max_faulty, num_faulty)
+
+        # Final objects to pass to pSNN: either tensors or tuple(tensor_main, tensor_faulty)
+        if isinstance(num_static_param_arg, tuple):
+            min_value_static_params_arg = (t_min_main, t_min_faulty)
+            max_value_static_params_arg = (t_max_main, t_max_faulty)
+        else:
+            min_value_static_params_arg = t_min_main
+            max_value_static_params_arg = t_max_main
+
+        # (Optional) log parsed values for debugging
+        logger.debug("Static params parsed: num_main=%s num_faulty=%s", num_main, num_faulty)
+        logger.debug("min_main=%s max_main=%s", t_min_main.tolist(), t_max_main.tolist())
+        logger.debug("min_faulty=%s max_faulty=%s", t_min_faulty.tolist(), t_max_faulty.tolist())
+
 
         # instantiate the model wrapper
         surrogate_ckpt = args_cli.surrogate_ckpt
@@ -352,12 +521,13 @@ def main():
                 valid_loader=valid_loader,
                 test_loader=test_loader,
                 surrogate_gradient=snn.surrogate.atan(),
-                num_static_param=4, # How many static_paramater does the dataset have the surrogate model is trained on?
-                min_value_static_params=torch.tensor([0.0, 0.1, 0.15, 0.5]), # What are the minimum values of the static parmater from dataset the surrogate model was trained on 
-                max_value_static_params=torch.tensor([1.0, 1.0,  1.0, 1.0]), # What are the maximum values of the static parmater from dataset the surrogate model was trained on 
+                num_static_param=num_static_param_arg,
+                min_value_static_params=min_value_static_params_arg,
+                max_value_static_params=max_value_static_params_arg,
                 faulty_ckpt_paths=faulty_ckpts_list,
                 fault_prob=args_cli.fault_prob,
             )
+
             logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s)",
                         surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None))
         except Exception as e:

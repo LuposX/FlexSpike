@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union, Tuple
 
 from utils.evaluation import Evaluator
 
@@ -20,9 +20,11 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  valid_loader,
                  test_loader,
                  surrogate_gradient,
-                 num_static_param: int,
-                 min_value_static_params,
-                 max_value_static_params,
+                 # either int (single main/faulty) or a tuple (main:int, faulty:int)
+                 num_static_param: Union[int, Tuple[int, int]], 
+                 # either a tensor for main/faulty shared, or a pair of tensor/list (main, faulty)
+                 min_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
+                 max_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
                  loss_fn=None,
                  train_dataset=None,
                  valid_dataset=None,
@@ -226,11 +228,23 @@ class pSpikeGenerator(nn.Module):
         super().__init__()
         self.args = args
 
-        # Validate num_static_param early
-        if not (isinstance(num_static_param, int) or (isinstance(num_static_param, torch.Tensor) and num_static_param.numel()==1)):
-            raise TypeError(f"num_static_param must be an int (number of static params). Got: {type(num_static_param)}")
+        # Helper: allow either single-spec or pair-spec (main, faulty)
+        def _split_pair(x, name):
+            # returns (main, faulty)
+            if isinstance(x, (list, tuple)) and len(x) == 2:
+                return x[0], x[1]
+            else:
+                return x, x
 
-        self.num_static_param = int(num_static_param)
+        # parse number-of-static-params (can be int or (int,int))
+        n_main, n_faulty = _split_pair(num_static_param, "num_static_param")
+        if not (isinstance(n_main, int) or (isinstance(n_main, torch.Tensor) and n_main.numel()==1)):
+            raise TypeError(f"num_static_param main must be an int or scalar tensor. Got: {type(n_main)}")
+        if not (isinstance(n_faulty, int) or (isinstance(n_faulty, torch.Tensor) and n_faulty.numel()==1)):
+            raise TypeError(f"num_static_param faulty must be an int or scalar tensor. Got: {type(n_faulty)}")
+
+        self.num_static_param_main = int(n_main)
+        self.num_static_param_faulty = int(n_faulty)
 
         # Load the *clean* spike generator
         self.spike_generator = model_class.load_from_checkpoint(
@@ -266,32 +280,51 @@ class pSpikeGenerator(nn.Module):
         self.fault_prob = float(fault_prob) if fault_prob is not None else float(getattr(args, "fault_prob", 0.0))
 
         # Define raw trainable parameters (unconstrained) on correct device
-        self.raw_params = nn.Parameter(torch.randn(1, self.num_static_param, device=self.DEVICE))
+        # main raw params
+        self.raw_params_main = nn.Parameter(torch.randn(1, self.num_static_param_main, device=self.DEVICE)) \
+                                if self.num_static_param_main > 0 else None
+        # faulty raw params (shared for all faulty surrogates)
+        self.raw_params_faulty = nn.Parameter(torch.randn(1, self.num_static_param_faulty, device=self.DEVICE)) \
+                                 if (self.num_static_param_faulty > 0 and len(self.faulty_spike_generators) > 0) else None
 
         # Ensure min/max are tensors on the right device and shaped (num_static_param,)
-        self.low = (min_value_static_params.clone().detach().to(self.DEVICE).view(-1)) 
-        self.high = (max_value_static_params.clone().detach().to(self.DEVICE).view(-1))
+        min_main, min_faulty = _split_pair(min_value_static_params, "min_value_static_params")
+        max_main, max_faulty = _split_pair(max_value_static_params, "max_value_static_params")
 
-        if self.low.numel() != self.num_static_param or self.high.numel() != self.num_static_param:
-            raise ValueError(f"min/max vectors must have length {self.num_static_param}; got {self.low.numel()}/{self.high.numel()}")
+        # Convert to tensors on device and view(-1)
+        self.low_main = (min_main.clone().detach().to(self.DEVICE).view(-1)) if isinstance(min_main, torch.Tensor) else \
+                        torch.tensor(min_main, device=self.DEVICE).view(-1)
+        self.high_main = (max_main.clone().detach().to(self.DEVICE).view(-1)) if isinstance(max_main, torch.Tensor) else \
+                         torch.tensor(max_main, device=self.DEVICE).view(-1)
+
+        self.low_faulty = (min_faulty.clone().detach().to(self.DEVICE).view(-1)) if isinstance(min_faulty, torch.Tensor) else \
+                          torch.tensor(min_faulty, device=self.DEVICE).view(-1)
+        self.high_faulty = (max_faulty.clone().detach().to(self.DEVICE).view(-1)) if isinstance(max_faulty, torch.Tensor) else \
+                           torch.tensor(max_faulty, device=self.DEVICE).view(-1)
+
+        if self.low_main.numel() != self.num_static_param_main or self.high_main.numel() != self.num_static_param_main:
+            raise ValueError(f"min/max main vectors must have length {self.num_static_param_main}; got {self.low_main.numel()}/{self.high_main.numel()}")
+        if (len(self.faulty_spike_generators) > 0) and (self.low_faulty.numel() != self.num_static_param_faulty or self.high_faulty.numel() != self.num_static_param_faulty):
+            raise ValueError(f"min/max faulty vectors must have length {self.num_static_param_faulty}; got {self.low_faulty.numel()}/{self.high_faulty.numel()}")
 
     @property
     def DEVICE(self):
         return torch.device(self.args.DEVICE) if isinstance(self.args.DEVICE, str) else self.args.DEVICE
 
-    def transform_params(self):
-        r = (self.high - self.low) / 2
-        c = (self.high + self.low) / 2
-        return c + r * torch.tanh(self.raw_params)
+    def _transform(self, raw_params, low, high):
+        # raw_params shape: (1, num_static_param)
+        if raw_params is None:
+            return None
+        r = (high - low) / 2
+        c = (high + low) / 2
+        # ensure shapes broadcastable: low/high are (num_static_param,), raw (1,num_static_param)
+        return c + r * torch.tanh(raw_params)
 
     def forward(self, x):
         # Decide whether to use faulty surrogate for this neuron
-        # Use probability from args if present (so test sweeps can change it)
         fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
         use_fault = False
         if fault_p > 0.0 and len(self.faulty_spike_generators) > 0:
-            # decide per-module (neuron) — consistent across batch (like standard dropout)
-            # but if you prefer per-sample decision change the sampling logic
             if torch.rand(1).item() < fault_p:
                 use_fault = True
 
@@ -303,15 +336,29 @@ class pSpikeGenerator(nn.Module):
         else:
             spike_gen = self.spike_generator
 
-        # Transform and expand trainable parameters
+        # Transform and expand trainable parameters according to chosen surrogate
         batch_size = x.shape[0]
         T = x.shape[2]
-        extra_params = self.transform_params()  # (1, num_static_param)
-        expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param)
-        expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param, T)
 
-        # Concatenate with input
-        x = torch.cat([x, expanded_params], dim=1)  # (B, C+num_static_param, T)
+        if spike_gen is self.spike_generator:
+            extra_params = self._transform(self.raw_params_main, self.low_main, self.high_main)  # (1, num_static_param_main)
+            if extra_params is None:
+                # if no static params for main, make an empty tensor with zero channels
+                expanded_params = torch.empty(batch_size, 0, T, device=self.DEVICE)
+            else:
+                expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param_main)
+                expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param_main, T)
+        else:
+            # using faulty surrogate
+            extra_params = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
+            if extra_params is None:
+                expanded_params = torch.empty(batch_size, 0, T, device=self.DEVICE)
+            else:
+                expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param_faulty)
+                expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param_faulty, T)
+
+        # Concatenate with input along channel dimension (if expanded_params has zero channels, cat works)
+        x = torch.cat([x, expanded_params], dim=1)  # (B, C+num_static_param_*, T)
 
         return spike_gen(x)
 
@@ -319,6 +366,7 @@ class pSpikeGenerator(nn.Module):
         self.args = args
         # refresh fault probability from args (if changed)
         self.fault_prob = float(getattr(args, "fault_prob", self.fault_prob))
+
 
 
 # ===============================================================================
@@ -573,14 +621,17 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                 layer.UpdateArgs(args)
 
     def GetParam(self):
+        # include any parameter containing 'raw_params' (covers raw_params_main and raw_params_faulty)
         weights = [p for name, p in self.named_parameters()
-                if name.endswith('theta_') or name.endswith('beta') or name.endswith('raw_params')]
+                if name.endswith('theta_') or name.endswith('beta') or 'raw_params' in name]
         nonlinear = [p for name, p in self.named_parameters()
                     if name.endswith('rt_')]
         if self.args.lnc:
             return weights + nonlinear
         else:
             return weights
+
+
 
 # ===============================================================================
 # ============================= Loss Functin ====================================
