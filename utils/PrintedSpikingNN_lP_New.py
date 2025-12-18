@@ -385,55 +385,65 @@ class pSpikeGenerator(nn.Module):
         return c + r * torch.tanh(raw_params)
 
     def forward(self, x):
-        # Get current fault probability (annealed)
+        # Selection probability (whether this neuron is affected)
         fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
-        
+    
+        # Mixing strength (how faulty it is) — ramps to 1.0
+        alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))
+        alpha = max(0.0, min(1.0, alpha))  # safety clamp
+    
         batch_size = x.shape[0]
         T = x.shape[2]
-        
-        # Always compute nominal output
-        if self.raw_params_main is not None:
-            extra_params_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
-            expanded_main = extra_params_main.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
+        device = self.DEVICE
+    
+        # === Build MAIN input ===
+        extra_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
+        if extra_main is None:
+            expanded_main = torch.empty(batch_size, 0, T, device=device)
         else:
-            expanded_main = torch.empty(batch_size, 0, T, device=self.DEVICE)
-        
-        x_nominal = torch.cat([x, expanded_main], dim=1)
-        with torch.no_grad():  # nominal surrogate is frozen
-            nominal_output = self.spike_generator(x_nominal)
-        
-        # Default: no fault contribution
-        blended_output = nominal_output
-        
-        # If fault injection is active and we have faulty surrogates
-        if fault_p > 0.0 and len(self.faulty_spike_generators) > 0:
-            # Per-neuron decision: which neurons get any faulty contribution this forward pass
-            # Shape: (batch_size, 1, 1) for broadcasting
-            mask = (torch.rand(batch_size, 1, 1, device=self.DEVICE) < fault_p).float()
-            
-            if mask.sum() > 0:  # only compute faulty path if at least one neuron is affected
-                # Pick one random faulty surrogate for this entire batch (you can change to per-neuron if desired)
-                idx = torch.randint(len(self.faulty_spike_generators), (1,)).item()
-                faulty_gen = self.faulty_spike_generators[idx]
-                
-                # Compute faulty parameters (shared across faulty types in your current setup)
-                if self.raw_params_faulty is not None:
-                    extra_params_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
-                    expanded_faulty = extra_params_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
-                else:
-                    expanded_faulty = torch.empty(batch_size, 0, T, device=self.DEVICE)
-                
-                x_faulty = torch.cat([x, expanded_faulty], dim=1)
-                with torch.no_grad():
-                    faulty_output = faulty_gen(x_faulty)
-                
-                # Blend: output = (1 - α) * nominal + α * faulty
-                # Where mask=0 → α effectively 0
-                alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))  # ramps to 1.0
-                blended = (1 - alpha) * nominal_output + alpha * faulty_output
-                blended_output = mask * blended + (1 - mask) * nominal_output
-        
-        return blended_output
+            expanded_main = (
+                extra_main.expand(batch_size, -1)
+                          .unsqueeze(2)
+                          .expand(-1, -1, T)
+            )
+        x_main = torch.cat([x, expanded_main], dim=1)
+    
+        # Always compute main output
+        out_main = self.spike_generator(x_main)
+    
+        # === If no faulty surrogates or fault_prob == 0 → return main ===
+        if fault_p <= 0.0 or len(self.faulty_spike_generators) == 0 or alpha <= 0.0:
+            return out_main
+    
+        # === Build FAULTY input ===
+        extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
+        if extra_faulty is None:
+            expanded_faulty = torch.empty(batch_size, 0, T, device=device)
+        else:
+            expanded_faulty = (
+                extra_faulty.expand(batch_size, -1)
+                             .unsqueeze(2)
+                             .expand(-1, -1, T)
+            )
+        x_faulty = torch.cat([x, expanded_faulty], dim=1)
+    
+        # Pick one faulty surrogate
+        idx = torch.randint(len(self.faulty_spike_generators), (1,), device=device).item()
+        faulty_gen = self.faulty_spike_generators[idx]
+        out_faulty = faulty_gen(x_faulty)
+    
+        # === Sample which batch elements are affected ===
+        # Shape: (B, 1, 1) → broadcasts over (C, T)
+        fault_mask = (torch.rand(batch_size, 1, 1, device=device) < fault_p).float()
+    
+        # Deterministic alpha, gated by selection mask
+        alpha_tensor = fault_mask * alpha
+    
+        # === Interpolated output ===
+        out = (1.0 - alpha_tensor) * out_main + alpha_tensor * out_faulty
+    
+        return out
+
 
     def UpdateArgs(self, args):
         self.args = args
