@@ -134,8 +134,23 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         return {"test_loss": loss}
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self, outputs):
         """
+        After the normal test epoch, run additional evaluations (sweep) with different
+        fault probabilities. Logs metrics for each fault level.
+        """
+        # default fault level list: 0.0 and the training-level fault_prob
+        orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
+        configured_levels = getattr(self.args, "test_fault_levels", None)
+
+        if configured_levels is None:
+            levels = sorted(set([0.0, float(orig_fault_prob)]))
+        else:
+            levels = sorted(set([float(l) for l in configured_levels]))
+
+        # helper to evaluate the whole test_loader with a given fault probability
+        def evaluate_with_prob(p):
+            """
         After the normal test epoch, run additional evaluations (sweep) with different
         fault probabilities. Logs metrics for each fault level.
         """
@@ -174,6 +189,20 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             mean_acc = acc_sum / (total_samples + 1e-12)
             mean_power = power_sum / (total_samples + 1e-12)
             return mean_acc, mean_power
+
+        # Run sweep and log
+        for p in levels:
+            mean_acc, mean_power = evaluate_with_prob(p)
+            tag = f"test_acc_fault_{int(p*100)}"
+            tag_power = f"test_power_fault_{int(p*100)}"
+            # log scalars
+            self.log(tag, mean_acc, prog_bar=True, on_epoch=True)
+            self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
+
+        # restore original
+        setattr(self.args, "fault_prob", float(orig_fault_prob))
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(self.args)
 
         # Run sweep and log
         for p in levels:
