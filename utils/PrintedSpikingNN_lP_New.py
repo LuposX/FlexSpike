@@ -141,7 +141,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         # Optional: log the current fault probability
         self.log("fault_prob", current_prob, on_epoch=True, prog_bar=True)
 
-        def on_train_epoch_end(self):
+    def on_train_epoch_end(self):
         opt = self.optimizers()
         lr = opt.param_groups[0]["lr"]
         self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
