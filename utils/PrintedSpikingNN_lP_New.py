@@ -429,7 +429,7 @@ class pSpikeGenerator(nn.Module):
                 
                 # Blend: output = (1 - α) * nominal + α * faulty
                 # Where mask=0 → α effectively 0
-                alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))  ramps to 1.0
+                alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))  # ramps to 1.0
                 blended = (1 - alpha) * nominal_output + alpha * faulty_output
                 blended_output = mask * blended + (1 - mask) * nominal_output
         
