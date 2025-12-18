@@ -134,7 +134,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         return {"test_loss": loss}
 
-    def on_test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         """
         After the normal test epoch, run additional evaluations (sweep) with different
         fault probabilities. Logs metrics for each fault level.
@@ -151,17 +151,17 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         # helper to evaluate the whole test_loader with a given fault probability
         def evaluate_with_prob(p):
             """
-        After the normal test epoch, run additional evaluations (sweep) with different
-        fault probabilities. Logs metrics for each fault level.
-        """
-        # default fault level list: 0.0 and the training-level fault_prob
-        orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
-        configured_levels = getattr(self.args, "test_fault_levels", None)
-
-        if configured_levels is None:
-            levels = sorted(set([0.0, float(orig_fault_prob)]))
-        else:
-            levels = sorted(set([float(l) for l in configured_levels]))
+            After the normal test epoch, run additional evaluations (sweep) with different
+            fault probabilities. Logs metrics for each fault level.
+            """
+            # default fault level list: 0.0 and the training-level fault_prob
+            orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
+            configured_levels = getattr(self.args, "test_fault_levels", None)
+    
+            if configured_levels is None:
+                levels = sorted(set([0.0, float(orig_fault_prob)]))
+            else:
+                levels = sorted(set([float(l) for l in configured_levels]))
 
         # helper to evaluate the whole test_loader with a given fault probability
         def evaluate_with_prob(p):
@@ -603,11 +603,18 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                  faulty_ckpt_paths: Optional[List[str]] = None, fault_prob: float = 0.0):
         super().__init__()
         self.args = args
-
         self.INV = Inv(args)
 
         self.model = torch.nn.Sequential()
-        for i in range(len(topology)-1):
+        num_layers = len(topology) - 1
+        
+        for i in range(num_layers):
+            is_output_layer = (i == num_layers - 1)
+            
+            # If it's the output layer, force probability to 0 and remove faulty paths
+            current_fault_prob = 0.0 if is_output_layer else fault_prob
+            current_faulty_ckpts = [] if is_output_layer else faulty_ckpt_paths
+
             self.model.add_module(
                 str(i) + '_pLayer',
                 pLayer(
@@ -623,8 +630,8 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                     num_static_param,
                     min_value_static_params,
                     max_value_static_params,
-                    faulty_ckpt_paths=faulty_ckpt_paths,
-                    fault_prob=fault_prob
+                    faulty_ckpt_paths=current_faulty_ckpts, # Pass empty list for output
+                    fault_prob=current_fault_prob          # Pass 0.0 for output
                 )
             )
 
