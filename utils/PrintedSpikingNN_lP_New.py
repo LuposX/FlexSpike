@@ -54,6 +54,14 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         setattr(args, "fault_prob", float(fault_prob))
         setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
 
+        # Fault warm-up configuration
+        self.warmup_epochs = getattr(args, "fault_warmup_epochs", 20)   # epochs with fault_prob=0
+        self.ramp_epochs = getattr(args, "fault_ramp_epochs", 50)       # epochs to ramp up
+        self.max_fault_prob = getattr(args, "max_fault_prob", fault_prob)  # target prob
+        if self.max_fault_prob > 0:
+            print(f"Fault injection warm-up: 0 for {self.warmup_epochs} epochs, "
+                  f"then ramp to {self.max_fault_prob} over {self.ramp_epochs} epochs")
+
         self.args = args
         self.network = PrintedSpikingNeuralNetwork(
             topology, args, model_class, ckpt_path,
@@ -107,10 +115,40 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         return {"loss": loss}
 
-    def on_train_epoch_end(self):
+    def on_train_epoch_start(self):
+        """Gradually increase fault_prob during training."""
+        if self.max_fault_prob <= 0:
+            return  # no fault injection
+
+        epoch = self.current_epoch
+
+        if epoch < self.warmup_epochs:
+            current_prob = 0.0
+        elif epoch < self.warmup_epochs + self.ramp_epochs:
+            # Linear ramp
+            progress = (epoch - self.warmup_epochs) / self.ramp_epochs
+            current_prob = self.max_fault_prob * progress
+        else:
+            current_prob = self.max_fault_prob
+
+        # Update the args object
+        setattr(self.args, "fault_prob", float(current_prob))
+
+        # Propagate to the network so all pSpikeGenerators see the new value
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(self.args)
+
+        # Optional: log the current fault probability
+        self.log("fault_prob", current_prob, on_epoch=True, prog_bar=True)
+
+        def on_train_epoch_end(self):
         opt = self.optimizers()
         lr = opt.param_groups[0]["lr"]
         self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
+        
+        # Also log current fault prob (in case it wasn't logged in on_train_epoch_start)
+        current_prob = float(getattr(self.args, "fault_prob", 0.0))
+        self.log("fault_prob", current_prob, prog_bar=False, on_step=False, on_epoch=True)
     
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -124,97 +162,83 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         return {"val_loss": loss}
 
     def test_step(self, batch, batch_idx):
+        # Temporarily disable faults for the main test metrics
+        orig_fault_prob = float(getattr(self.args, "fault_prob", 0.0))
+        setattr(self.args, "fault_prob", 0.0)
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(self.args)
+    
         x, y = batch
         loss = self.loss_fn(self.network, x, y)
         test_acc, test_power = self.evaluator(self.network, x, y)
-
-        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_acc", test_acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_power", test_power, on_step=False, on_epoch=True, prog_bar=False)
-
-        return {"test_loss": loss}
+    
+        # Restore original for consistency (though not strictly needed in test)
+        setattr(self.args, "fault_prob", orig_fault_prob)
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(self.args)
+    
+        self.log("test_loss_fault_0.0", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_acc_fault_0.0", test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_power_fault_0.0", test_power, on_step=False, on_epoch=True, prog_bar=False)
+        return {"test_loss_fault_0.0": loss}
 
     def on_test_epoch_end(self):
         """
         After the normal test epoch, run additional evaluations (sweep) with different
         fault probabilities. Logs metrics for each fault level.
         """
-        # default fault level list: 0.0 and the training-level fault_prob
-        orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
+        # Get original fault probability to restore later
+        orig_fault_prob = float(getattr(self.args, "fault_prob", 0.0))
+   
+        # Determine which fault levels to test
         configured_levels = getattr(self.args, "test_fault_levels", None)
-
         if configured_levels is None:
-            levels = sorted(set([0.0, float(orig_fault_prob)]))
+            levels = sorted(set([0.0, orig_fault_prob]))
         else:
             levels = sorted(set([float(l) for l in configured_levels]))
 
-        # helper to evaluate the whole test_loader with a given fault probability
-        def evaluate_with_prob(p):
-            """
-            After the normal test epoch, run additional evaluations (sweep) with different
-            fault probabilities. Logs metrics for each fault level.
-            """
-            # default fault level list: 0.0 and the training-level fault_prob
-            orig_fault_prob = getattr(self.args, "fault_prob", 0.0)
-            configured_levels = getattr(self.args, "test_fault_levels", None)
-    
-            if configured_levels is None:
-                levels = sorted(set([0.0, float(orig_fault_prob)]))
-            else:
-                levels = sorted(set([float(l) for l in configured_levels]))
+        # Remove 0.0 from the sweep since we already logged it in test_step
+        levels = [p for p in levels if p > 0.0]
 
-        # helper to evaluate the whole test_loader with a given fault probability
-        def evaluate_with_prob(p):
-            # temporarily set fault probability
-            setattr(self.args, "fault_prob", float(p))
-            # ensure modules that read args get updated
+        if not levels:
+            return  # nothing to sweep
+        
+        # Helper to evaluate the entire test_loader with a given fault probability
+        def evaluate_with_prob(p: float):
+            # Temporarily override fault probability
+            setattr(self.args, "fault_prob", p)
             if hasattr(self.network, "UpdateArgs"):
                 self.network.UpdateArgs(self.args)
-
+    
             self.network.eval()
             acc_sum = 0.0
             power_sum = 0.0
             total_samples = 0
-
+    
             with torch.no_grad():
                 for xb, yb in self.test_loader:
-                    xb = xb.to(self.network.DEVICE) if isinstance(self.network.DEVICE, torch.device) else xb.to(self.args.DEVICE)
-                    yb = yb.to(self.network.DEVICE) if isinstance(self.network.DEVICE, torch.device) else yb.to(self.args.DEVICE)
+                    xb = xb.to(self.network.DEVICE)
+                    yb = yb.to(self.network.DEVICE)
                     batch_acc, batch_power = self.evaluator(self.network, xb, yb)
                     batch_n = xb.shape[0]
                     acc_sum += float(batch_acc) * batch_n
                     power_sum += float(batch_power) * batch_n
                     total_samples += batch_n
-
+    
             mean_acc = acc_sum / (total_samples + 1e-12)
             mean_power = power_sum / (total_samples + 1e-12)
             return mean_acc, mean_power
-
-        # Run sweep and log
+    
+        # Run the sweep once
         for p in levels:
             mean_acc, mean_power = evaluate_with_prob(p)
-            tag = f"test_acc_fault_{int(p*100)}"
-            tag_power = f"test_power_fault_{int(p*100)}"
-            # log scalars
-            self.log(tag, mean_acc, prog_bar=True, on_epoch=True)
+            tag_acc = f"test_acc_fault_{int(p * 100)}"
+            tag_power = f"test_power_fault_{int(p * 100)}"
+            self.log(tag_acc, mean_acc, prog_bar=True, on_epoch=True)
             self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
-
-        # restore original
-        setattr(self.args, "fault_prob", float(orig_fault_prob))
-        if hasattr(self.network, "UpdateArgs"):
-            self.network.UpdateArgs(self.args)
-
-        # Run sweep and log
-        for p in levels:
-            mean_acc, mean_power = evaluate_with_prob(p)
-            tag = f"test_acc_fault_{int(p*100)}"
-            tag_power = f"test_power_fault_{int(p*100)}"
-            # log scalars
-            self.log(tag, mean_acc, prog_bar=True, on_epoch=True)
-            self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
-
-        # restore original
-        setattr(self.args, "fault_prob", float(orig_fault_prob))
+    
+        # Restore original fault probability
+        setattr(self.args, "fault_prob", orig_fault_prob)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
 

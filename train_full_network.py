@@ -209,17 +209,18 @@ def parse_args():
     p.add_argument("--fast-dev-run", action="store_true", help="Run lightning in fast_dev_run mode (debug)")
     p.add_argument("--stop-on-error", action="store_true", help="Stop on first dataset error (default: continue to next dataset)")
 
-    # Provide multiple faulty surrogate checkpoints as comma-separated string:
-    p.add_argument("--faulty-surrogates", type=str, default="",
-                   help="Comma-separated list of checkpoint paths for faulty surrogate models. E.g. '/path/f1.ckpt,/path/f2.ckpt'")
-
-    # Fault probability (dropout-like) per neuron during training/eval (0 disables)
+    # Fault-aware training with optional gradual warm-up
     p.add_argument("--fault-prob", type=float, default=0.0,
-                   help="Per-neuron probability to replace a clean surrogate with a faulty one during forward passes (dropout-like). 0 disables fault-aware training.")
-
-    # Test-time sweep: comma-separated list of fault probabilities to run tests with
-    p.add_argument("--test-fault-levels", type=str, default="0.0,0.1,0.2,0.3,0.4,0.5",
-                   help="Optional comma-separated list of fault probabilities to evaluate at test time. Example: '0.0,0.05,0.1'. If empty, defaults to [0.0, fault_prob].")
+                   help="Legacy flag: base fault probability. If --max-fault-prob is not set, this value is used as the target after warm-up.")
+    p.add_argument("--max-fault-prob", type=float, default=None,
+                   help="Maximum/target fault probability after warm-up phase. If not set, defaults to --fault-prob value.")
+    p.add_argument("--fault-warmup-epochs", type=int, default=30,
+                   help="Number of epochs to train with fault_prob = 0.0 before starting ramp-up. Default: 20")
+    p.add_argument("--fault-ramp-epochs", type=int, default=50,
+                   help="Number of epochs over which to linearly ramp fault_prob from 0 to max_fault_prob. Default: 50")
+    # Test-time sweep
+    p.add_argument("--test-fault-levels", type=str, default=None,
+                   help="Comma-separated fault probabilities to evaluate at test time (e.g. '0.0,0.05,0.1'). If not given, defaults to [0.0, training_fault_prob].")
     # --------------------------------------------------------------------
 
     return p.parse_args()
@@ -368,9 +369,25 @@ def main():
         if test_fault_levels is not None:
             setattr(args, "test_fault_levels", test_fault_levels)
 
-        # warn if user enabled fault_prob but provided no faulty surrogates
-        if args_cli.fault_prob > 0.0 and len(faulty_ckpts_list) == 0:
-            logger.warning("User set --fault-prob=%s but provided no --faulty-surrogates. Fault injection will be a no-op.", args_cli.fault_prob)
+         # Determine the actual max fault probability (priority: --max-fault-prob > --fault-prob > 0.0)
+        effective_max_fault_prob = args_cli.fault_prob  # default fallback
+        if args_cli.max_fault_prob is not None:
+            effective_max_fault_prob = args_cli.max_fault_prob
+        elif args_cli.fault_prob > 0.0:
+            effective_max_fault_prob = args_cli.fault_prob
+
+        # Warn if fault injection requested but no faulty surrogates
+        if effective_max_fault_prob > 0.0 and len(faulty_ckpts_list) == 0:
+            logger.warning("Fault injection requested (max_fault_prob=%.3f) but no --faulty-surrogates provided. Faults will be disabled.", effective_max_fault_prob)
+            effective_max_fault_prob = 0.0
+
+        # Pass warm-up settings into args so the Lightning module can read them
+        setattr(args, "max_fault_prob", effective_max_fault_prob)
+        setattr(args, "fault_warmup_epochs", args_cli.fault_warmup_epochs)
+        setattr(args, "fault_ramp_epochs", args_cli.fault_ramp_epochs)
+
+        logger.info("Fault-aware training config: max_fault_prob=%.3f, warmup_epochs=%d, ramp_epochs=%d",
+                    effective_max_fault_prob, args_cli.fault_warmup_epochs, args_cli.fault_ramp_epochs)
 
         
         # ---------------------------
