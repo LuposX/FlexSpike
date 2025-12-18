@@ -116,30 +116,41 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         return {"loss": loss}
 
     def on_train_epoch_start(self):
-        """Gradually increase fault_prob during training."""
+        """Gradually increase fault_prob (selection) and alpha (mixing strength)."""
         if self.max_fault_prob <= 0:
             return  # no fault injection
-
+    
         epoch = self.current_epoch
-
+    
+        # Compute selection probability (fault_prob) — caps at max_fault_prob (e.g., 0.1)
         if epoch < self.warmup_epochs:
-            current_prob = 0.0
+            current_fault_prob = 0.0
         elif epoch < self.warmup_epochs + self.ramp_epochs:
-            # Linear ramp
             progress = (epoch - self.warmup_epochs) / self.ramp_epochs
-            current_prob = self.max_fault_prob * progress
+            current_fault_prob = self.max_fault_prob * progress
         else:
-            current_prob = self.max_fault_prob
-
-        # Update the args object
-        setattr(self.args, "fault_prob", float(current_prob))
-
-        # Propagate to the network so all pSpikeGenerators see the new value
+            current_fault_prob = self.max_fault_prob
+    
+        # Compute mixing alpha — goes from 0 to 1.0 over the same schedule
+        if epoch < self.warmup_epochs:
+            current_alpha = 0.0
+        elif epoch < self.warmup_epochs + self.ramp_epochs:
+            progress = (epoch - self.warmup_epochs) / self.ramp_epochs
+            current_alpha = 1.0 * progress  # linear ramp to 1.0
+        else:
+            current_alpha = 1.0
+    
+        # Update args with both values
+        setattr(self.args, "fault_prob", float(current_fault_prob))
+        setattr(self.args, "fault_mix_alpha", float(current_alpha))  # new attribute
+    
+        # Propagate to network
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
-
-        # Optional: log the current fault probability
-        self.log("fault_prob", current_prob, on_epoch=True, prog_bar=True)
+    
+        # Log both
+        self.log("fault_prob", current_fault_prob, on_epoch=True, prog_bar=True)
+        self.log("fault_mix_alpha", current_alpha, on_epoch=True, prog_bar=False)
 
     def on_train_epoch_end(self):
         opt = self.optimizers()
@@ -374,46 +385,55 @@ class pSpikeGenerator(nn.Module):
         return c + r * torch.tanh(raw_params)
 
     def forward(self, x):
-        # Decide whether to use faulty surrogate for this neuron
+        # Get current fault probability (annealed)
         fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
-        use_fault = False
-        if fault_p > 0.0 and len(self.faulty_spike_generators) > 0:
-            if torch.rand(1).item() < fault_p:
-                use_fault = True
-
-        # pick spike generator to run
-        spike_gen = None
-        if use_fault:
-            idx = torch.randint(len(self.faulty_spike_generators), (1,)).item()
-            spike_gen = self.faulty_spike_generators[idx]
-        else:
-            spike_gen = self.spike_generator
-
-        # Transform and expand trainable parameters according to chosen surrogate
+        
         batch_size = x.shape[0]
         T = x.shape[2]
-
-        if spike_gen is self.spike_generator:
-            extra_params = self._transform(self.raw_params_main, self.low_main, self.high_main)  # (1, num_static_param_main)
-            if extra_params is None:
-                # if no static params for main, make an empty tensor with zero channels
-                expanded_params = torch.empty(batch_size, 0, T, device=self.DEVICE)
-            else:
-                expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param_main)
-                expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param_main, T)
+        
+        # Always compute nominal output
+        if self.raw_params_main is not None:
+            extra_params_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
+            expanded_main = extra_params_main.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
         else:
-            # using faulty surrogate
-            extra_params = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
-            if extra_params is None:
-                expanded_params = torch.empty(batch_size, 0, T, device=self.DEVICE)
-            else:
-                expanded_params = extra_params.expand(batch_size, -1)  # (B, num_static_param_faulty)
-                expanded_params = expanded_params.unsqueeze(2).expand(-1, -1, T)  # (B, num_static_param_faulty, T)
-
-        # Concatenate with input along channel dimension (if expanded_params has zero channels, cat works)
-        x = torch.cat([x, expanded_params], dim=1)  # (B, C+num_static_param_*, T)
-
-        return spike_gen(x)
+            expanded_main = torch.empty(batch_size, 0, T, device=self.DEVICE)
+        
+        x_nominal = torch.cat([x, expanded_main], dim=1)
+        with torch.no_grad():  # nominal surrogate is frozen
+            nominal_output = self.spike_generator(x_nominal)
+        
+        # Default: no fault contribution
+        blended_output = nominal_output
+        
+        # If fault injection is active and we have faulty surrogates
+        if fault_p > 0.0 and len(self.faulty_spike_generators) > 0:
+            # Per-neuron decision: which neurons get any faulty contribution this forward pass
+            # Shape: (batch_size, 1, 1) for broadcasting
+            mask = (torch.rand(batch_size, 1, 1, device=self.DEVICE) < fault_p).float()
+            
+            if mask.sum() > 0:  # only compute faulty path if at least one neuron is affected
+                # Pick one random faulty surrogate for this entire batch (you can change to per-neuron if desired)
+                idx = torch.randint(len(self.faulty_spike_generators), (1,)).item()
+                faulty_gen = self.faulty_spike_generators[idx]
+                
+                # Compute faulty parameters (shared across faulty types in your current setup)
+                if self.raw_params_faulty is not None:
+                    extra_params_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
+                    expanded_faulty = extra_params_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
+                else:
+                    expanded_faulty = torch.empty(batch_size, 0, T, device=self.DEVICE)
+                
+                x_faulty = torch.cat([x, expanded_faulty], dim=1)
+                with torch.no_grad():
+                    faulty_output = faulty_gen(x_faulty)
+                
+                # Blend: output = (1 - α) * nominal + α * faulty
+                # Where mask=0 → α effectively 0
+                alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))  ramps to 1.0
+                blended = (1 - alpha) * nominal_output + alpha * faulty_output
+                blended_output = mask * blended + (1 - mask) * nominal_output
+        
+        return blended_output
 
     def UpdateArgs(self, args):
         self.args = args
