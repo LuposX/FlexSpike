@@ -385,64 +385,86 @@ class pSpikeGenerator(nn.Module):
         return c + r * torch.tanh(raw_params)
 
     def forward(self, x):
-        # Selection probability (whether this neuron is affected)
+        """
+        Interpolated forward that preserves the original generator's output shape.
+        - Selection probability: fault_prob (controls which batch elements are affected)
+        - Mixing strength: fault_mix_alpha (deterministic in your schedule)
+        Returns tensors shaped exactly like the original spike_gen output:
+          - If spike_gen returns (B, T) originally -> we return (B, T)
+          - If spike_gen returns (B, 1, T) originally -> we return (B, T) by squeezing
+          - If any generator returns C>1 channels, we raise a helpful error (you said that shouldn't happen)
+        """
+        # selection prob & deterministic mix alpha
         fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
-    
-        # Mixing strength (how faulty it is) — ramps to 1.0
         alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))
-        alpha = max(0.0, min(1.0, alpha))  # safety clamp
+        alpha = max(0.0, min(1.0, alpha))
     
         batch_size = x.shape[0]
         T = x.shape[2]
         device = self.DEVICE
     
-        # === Build MAIN input ===
+        # Build MAIN input (same as original)
         extra_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
         if extra_main is None:
             expanded_main = torch.empty(batch_size, 0, T, device=device)
         else:
-            expanded_main = (
-                extra_main.expand(batch_size, -1)
-                          .unsqueeze(2)
-                          .expand(-1, -1, T)
-            )
+            expanded_main = extra_main.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
         x_main = torch.cat([x, expanded_main], dim=1)
+        out_main = self.spike_generator(x_main)  # run main (this also determines expected shape)
     
-        # Always compute main output
-        out_main = self.spike_generator(x_main)
-    
-        # === If no faulty surrogates or fault_prob == 0 → return main ===
+        # If there are no faulty surrogates or no mixing needed, return main EXACTLY as before
         if fault_p <= 0.0 or len(self.faulty_spike_generators) == 0 or alpha <= 0.0:
-            return out_main
+            # Preserve original shape: if out_main has singleton channel dim, squeeze it
+            if out_main.dim() == 3 and out_main.shape[1] == 1:
+                return out_main.squeeze(1)  # (B, T)
+            return out_main  # (B, T) or otherwise as produced
     
-        # === Build FAULTY input ===
+        # Build FAULTY input (same shape building rules)
         extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
         if extra_faulty is None:
             expanded_faulty = torch.empty(batch_size, 0, T, device=device)
         else:
-            expanded_faulty = (
-                extra_faulty.expand(batch_size, -1)
-                             .unsqueeze(2)
-                             .expand(-1, -1, T)
-            )
+            expanded_faulty = extra_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
         x_faulty = torch.cat([x, expanded_faulty], dim=1)
     
-        # Pick one faulty surrogate
+        # Choose one faulty surrogate at random
         idx = torch.randint(len(self.faulty_spike_generators), (1,), device=device).item()
         faulty_gen = self.faulty_spike_generators[idx]
         out_faulty = faulty_gen(x_faulty)
     
-        # === Sample which batch elements are affected ===
-        # Shape: (B, 1, 1) → broadcasts over (C, T)
+        # Validate shapes of out_main and out_faulty
+        # Acceptable shapes: (B, T) or (B, 1, T). Convert both to (B, C, T) for safe arithmetic.
+        def normalize_out(o, which):
+            if o.dim() == 2:          # (B, T) -> (B, 1, T)
+                return o.unsqueeze(1)
+            elif o.dim() == 3:
+                B, C, TT = o.shape
+                if TT != T:
+                    raise RuntimeError(f"{which} returned time-dim {TT} but input T={T}")
+                if C > 1:
+                    # Fail fast — you said outputs shouldn't have multiple channels
+                    raise RuntimeError(
+                        f"{which} produced {C} output channels (shape={tuple(o.shape)}). "
+                        "Expected single-channel output (B,1,T). Check checkpoint/model_class."
+                    )
+                return o  # (B, 1, T)
+            else:
+                raise RuntimeError(f"{which} returned unexpected ndim={o.dim()}; shape={tuple(o.shape)}")
+    
+        out_m = normalize_out(out_main, "main")
+        out_f = normalize_out(out_faulty, "faulty")
+    
+        # Per-batch selection mask: which samples are affected (shape (B,1,1))
         fault_mask = (torch.rand(batch_size, 1, 1, device=device) < fault_p).float()
+        alpha_tensor = fault_mask * alpha  # shape (B,1,1), broadcastable to (B,1,T)
     
-        # Deterministic alpha, gated by selection mask
-        alpha_tensor = fault_mask * alpha
+        # Interpolate (B,1,T)
+        out_mixed = (1.0 - alpha_tensor) * out_m + alpha_tensor * out_f  # (B,1,T)
     
-        # === Interpolated output ===
-        out = (1.0 - alpha_tensor) * out_main + alpha_tensor * out_faulty
-    
-        return out
+        # Return with the same outer shape as out_main originally produced:
+        # if out_main was (B, T) -> squeeze channel to (B, T). Otherwise (B,1,T) -> squeeze as well
+        # (we preserve original behavior: squeeze singleton channel)
+        return out_mixed.squeeze(1)  # (B, T)
 
 
     def UpdateArgs(self, args):
