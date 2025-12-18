@@ -221,6 +221,8 @@ def parse_args():
     # Test-time sweep
     p.add_argument("--test-fault-levels", type=str, default=None,
                    help="Comma-separated fault probabilities to evaluate at test time (e.g. '0.0,0.05,0.1'). If not given, defaults to [0.0, training_fault_prob].")
+    p.add_argument("--faulty-surrogates", type=str, default="",
+                    help="Comma-separated list of checkpoint paths for faulty surrogate models. E.g. '/path/f1.ckpt,/path/f2.ckpt'")
     # --------------------------------------------------------------------
 
     return p.parse_args()
