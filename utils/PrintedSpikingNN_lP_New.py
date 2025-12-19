@@ -51,9 +51,6 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                 f"Checkpoint file not found: {ckpt_path}"
             )
 
-        if fault_prob > 0.0 and len(faulty_ckpt_paths) == 0:
-            print("Warning: fault_prob > 0 but no faulty surrogate checkpoints were provided. Fault injection is disabled.")
-
         # Save hyperparameters (ignore heavy objects)
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn',
                                           'train_loader', 'valid_loader', 'test_loader'])
