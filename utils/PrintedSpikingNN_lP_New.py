@@ -4,6 +4,7 @@ import wandb
 import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
+import numpy as np
 from typing import Any, List, Optional, Union, Tuple
 
 from utils.evaluation import Evaluator
@@ -25,7 +26,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  test_loader,
                  surrogate_gradient,
                  # either int (single main/faulty) or a tuple (main:int, faulty:int)
-                 num_static_param: Union[int, Tuple[int, int]], 
+                 num_static_param: Union[int, Tuple[int, int]],
                  # either a tensor for main/faulty shared, or a pair of tensor/list (main, faulty)
                  min_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
                  max_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
@@ -33,7 +34,10 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  train_dataset=None,
                  valid_dataset=None,
                  faulty_ckpt_paths: Optional[List[str]] = None,  # list of faulty surrogate ckpts
-                 fault_prob: float = 0.0):                         # dropout-like probability
+                 # new args
+                 mc_samples: int = 1,                              # K: MC draws per minibatch
+                 use_interpolation: bool = False,                  # allow disabling interpolation
+                 warmup_epochs: int = 20):                         # keep warmup (no faults)
         super().__init__()
 
         if ckpt_path is None or ckpt_path == "" or not isinstance(ckpt_path, str):
@@ -54,24 +58,23 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn',
                                           'train_loader', 'valid_loader', 'test_loader'])
 
-        # Add fault config into args for downstream modules to read
-        setattr(args, "fault_prob", float(fault_prob))
-        setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
+        # Store MC + interpolation settings on args so downstream modules read them
+        setattr(args, "mc_samples", int(mc_samples))
+        setattr(args, "use_interpolation", bool(use_interpolation))
+        # initialize fault mode: start with no faults (warmup)
+        setattr(args, "fault_mode", "none")
+        # keep warmup_epochs on the module (user-specified or fallback)
+        self.warmup_epochs = int(getattr(args, "fault_warmup_epochs", warmup_epochs))
 
-        # Fault warm-up configuration
-        self.warmup_epochs = getattr(args, "fault_warmup_epochs", 20)   # epochs with fault_prob=0
-        self.ramp_epochs = getattr(args, "fault_ramp_epochs", 50)       # epochs to ramp up
-        self.max_fault_prob = getattr(args, "max_fault_prob", fault_prob)  # target prob
-        if self.max_fault_prob > 0:
-            print(f"Fault injection warm-up: 0 for {self.warmup_epochs} epochs, "
-                  f"then ramp to {self.max_fault_prob} over {self.ramp_epochs} epochs")
+        # keep older fault-related fields for backward compatibility but we won't use them
+        setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
 
         self.args = args
         self.network = PrintedSpikingNeuralNetwork(
             topology, args, model_class, ckpt_path,
             surrogate_gradient, train_dataset, valid_dataset,
             num_static_param, min_value_static_params, max_value_static_params,
-            faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=fault_prob
+            faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=0.0  # pass 0.0 to keep legacy param present
         )
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
@@ -128,41 +131,34 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         return {"loss": loss}
 
     def on_train_epoch_start(self):
-        """Gradually increase fault_prob (selection) and alpha (mixing strength)."""
-        if self.max_fault_prob <= 0:
-            return  # no fault injection
-    
+        """After warmup epochs, enable single-fault injection (exactly one faulty neuron per forward).
+           During warmup we keep fault_mode='none' (no faults)."""
         epoch = self.current_epoch
-    
-        # Compute selection probability (fault_prob) — caps at max_fault_prob (e.g., 0.1)
+
         if epoch < self.warmup_epochs:
-            current_fault_prob = 0.0
-        elif epoch < self.warmup_epochs + self.ramp_epochs:
-            progress = (epoch - self.warmup_epochs) / self.ramp_epochs
-            current_fault_prob = self.max_fault_prob * progress
+            current_mode = "none"
         else:
-            current_fault_prob = self.max_fault_prob
-    
-        # Compute mixing alpha — goes from 0 to 1.0 over the same schedule
-        if epoch < self.warmup_epochs:
-            current_alpha = 0.0
-        elif epoch < self.warmup_epochs + self.ramp_epochs:
-            progress = (epoch - self.warmup_epochs) / self.ramp_epochs
-            current_alpha = 1.0 * progress  # linear ramp to 1.0
-        else:
+            current_mode = "single"
+
+        setattr(self.args, "fault_mode", current_mode)
+
+        # mixing alpha: if interpolation is disabled via args.use_interpolation -> we treat alpha as 1.0 (full replacement)
+        if not bool(getattr(self.args, "use_interpolation", False)):
             current_alpha = 1.0
-    
-        # Update args with both values
-        setattr(self.args, "fault_prob", float(current_fault_prob))
-        setattr(self.args, "fault_mix_alpha", float(current_alpha))  # new attribute
-    
-        # Propagate to network
+        else:
+            # keep any user-provided alpha (default 1.0)
+            current_alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))
+        setattr(self.args, "fault_mix_alpha", current_alpha)
+
+        # propagate to network
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
-    
-        # Log both
-        self.log("fault_prob", current_fault_prob, on_epoch=True, prog_bar=True)
-        self.log("fault_mix_alpha", current_alpha, on_epoch=True, prog_bar=False)
+
+        # Log simple numeric indicators (PL logs prefer numeric values)
+        mode_flag = 0 if current_mode == "none" else 1
+        self.log("fault_mode_single_flag", mode_flag, on_epoch=True, prog_bar=True)
+        self.log("mc_samples", int(getattr(self.args, "mc_samples", 1)), on_epoch=True, prog_bar=False)
+
 
     def on_train_epoch_end(self):
         opt = self.optimizers()
@@ -185,65 +181,60 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         return {"val_loss": loss}
 
     def test_step(self, batch, batch_idx):
-        # Temporarily disable faults for the main test metrics
-        orig_fault_prob = float(getattr(self.args, "fault_prob", 0.0))
-        setattr(self.args, "fault_prob", 0.0)
+        # Temporarily disable faults for the main test metrics (use fault_mode='none')
+        orig_mode = getattr(self.args, "fault_mode", "none")
+        setattr(self.args, "fault_mode", "none")
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
-    
+
         x, y = batch
         loss = self.loss_fn(self.network, x, y)
         test_acc, test_power = self.evaluator(self.network, x, y)
-    
-        # Restore original for consistency (though not strictly needed in test)
-        setattr(self.args, "fault_prob", orig_fault_prob)
+
+        # Restore original mode
+        setattr(self.args, "fault_mode", orig_mode)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
-    
+
         self.log("test_loss_fault_0.0", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test_acc_fault_0.0", test_acc, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test_power_fault_0.0", test_power, on_step=False, on_epoch=True, prog_bar=False)
         return {"test_loss_fault_0.0": loss}
+        
 
     def on_test_epoch_end(self):
         """
-        After the normal test epoch, run additional evaluations (sweep) with different
-        fault probabilities. Logs metrics for each fault level and computes micro-averaged
-        one-vs-rest ROC AUC for each level (if enabled).
+        Evaluate the test set under different fault modes using MC sampling.
+        Uses args.eval_mc_samples if set, else args.mc_samples, else 1.
+        Averages softmax probabilities across MC draws to compute accuracy & ROC.
         """
-        # Get original fault probability to restore later
-        orig_fault_prob = float(getattr(self.args, "fault_prob", 0.0))
-   
-        # Determine which fault levels to test
-        configured_levels = getattr(self.args, "test_fault_levels", None)
-        if configured_levels is None:
-            levels = sorted(set([0.0, orig_fault_prob]))
-        else:
-            levels = sorted(set([float(l) for l in configured_levels]))
-
-        # Remove 0.0 from the sweep since we already logged it in test_step
-        levels = [p for p in levels if p > 0.0]
-
-        if not levels and not self.compute_roc:
-            # nothing to sweep and no ROC requested
-            # still restore original fault prob just in case
-            setattr(self.args, "fault_prob", orig_fault_prob)
-            if hasattr(self.network, "UpdateArgs"):
-                self.network.UpdateArgs(self.args)
-            return  # nothing to sweep
-        
-        # Helper to evaluate the entire test_loader with a given fault probability
-        def evaluate_with_prob(p: float):
-            # Temporarily override fault probability
-            setattr(self.args, "fault_prob", p)
-            if hasattr(self.network, "UpdateArgs"):
-                self.network.UpdateArgs(self.args)
+        # Save originals to restore later
+        orig_mode = getattr(self.args, "fault_mode", "none")
+        orig_mc = int(getattr(self.args, "mc_samples", 1))
+        orig_use_interp = bool(getattr(self.args, "use_interpolation", False))
     
+        # Determine modes to sweep
+        configured_modes = getattr(self.args, "test_fault_modes", None)
+        if configured_modes is None:
+            sweep_modes = ["none", "single"]
+        else:
+            sweep_modes = [str(m) for m in configured_modes]
+        if "none" not in sweep_modes:
+            sweep_modes = ["none"] + sweep_modes
+    
+        # decide eval_K default: args.eval_mc_samples else args.mc_samples else 1
+        eval_K_default = int(getattr(self.args, "eval_mc_samples", getattr(self.args, "mc_samples", 1)))
+    
+        def evaluate_mode(mode: str, eval_K: int):
+            """Evaluate the entire test_loader for a single fault mode and return metrics."""
+            setattr(self.args, "fault_mode", mode)
+            if hasattr(self.network, "UpdateArgs"):
+                self.network.UpdateArgs(self.args)
             self.network.eval()
+    
+            total_samples = 0
             acc_sum = 0.0
             power_sum = 0.0
-            total_samples = 0
-
             probs_list = []
             labels_list = []
     
@@ -251,50 +242,60 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                 for xb, yb in self.test_loader:
                     xb = xb.to(self.network.DEVICE)
                     yb = yb.to(self.network.DEVICE)
-                    batch_acc, batch_power = self.evaluator(self.network, xb, yb)
-                    batch_n = xb.shape[0]
-                    acc_sum += float(batch_acc) * batch_n
-                    power_sum += float(batch_power) * batch_n
-                    total_samples += batch_n
-
-                    # Collect probabilities for ROC (aggregate over time by mean)
-                    preds = self.network(xb)  # (B, C, T) or (B, T)
-                    if preds.dim() == 2:
-                        logits = preds.unsqueeze(1)  # (B,1,T)
-                    else:
-                        logits = preds  # (B,C,T)
-                    avg_logits = logits.mean(dim=2)  # (B, C)
-                    probs = torch.softmax(avg_logits, dim=1).detach().cpu()
-                    probs_list.append(probs)
-                    labels_list.append(yb.detach().cpu())
+                    B = xb.shape[0]
+                    total_samples += B
     
-            mean_acc = acc_sum / (total_samples + 1e-12)
-            mean_power = power_sum / (total_samples + 1e-12)
+                    # accumulate probabilities (numpy) and power across MC draws
+                    probs_accum = None
+                    power_accum = 0.0
+    
+                    for k in range(eval_K):
+                        preds = self.network(xb)  # (B, C, T) or (B, T)
+                        if preds.dim() == 2:
+                            preds = preds.unsqueeze(1)  # (B,1,T)
+                        avg_logits = preds.mean(dim=2)  # (B, C)
+                        probs_k = torch.softmax(avg_logits, dim=1).detach().cpu().numpy()  # (B, C)
+    
+                        if probs_accum is None:
+                            probs_accum = probs_k
+                        else:
+                            probs_accum += probs_k
+    
+                        power_accum += float(self.network.power.detach().cpu().item())
+    
+                    probs_mean = probs_accum / float(eval_K)  # (B, C) numpy
+                    mean_power_batch = power_accum / float(eval_K)
+    
+                    preds_labels = np.argmax(probs_mean, axis=1)
+                    y_np = yb.detach().cpu().numpy()
+                    batch_acc = (preds_labels == y_np).mean()
+    
+                    acc_sum += float(batch_acc) * B
+                    power_sum += float(mean_power_batch) * B
+    
+                    probs_list.append(torch.from_numpy(probs_mean))
+                    labels_list.append(torch.from_numpy(y_np))
+    
             probs_all = torch.cat(probs_list, dim=0).numpy() if len(probs_list) else None
             labels_all = torch.cat(labels_list, dim=0).numpy() if len(labels_list) else None
+            mean_acc = acc_sum / (total_samples + 1e-12)
+            mean_power = power_sum / (total_samples + 1e-12)
             return mean_acc, mean_power, probs_all, labels_all
     
-        # Run the sweep once and compute ROC per level (if requested)
-        # Also include the baseline orig_fault_prob (if not zero) and/or 0.0 as needed
-        sweep_levels = [0.0] + levels if 0.0 not in levels else levels
-        # ensure orig_fault_prob included so we evaluate original if it wasn't 0
-        if orig_fault_prob not in sweep_levels:
-            sweep_levels.append(orig_fault_prob)
-        sweep_levels = sorted(set(sweep_levels))
-
-        for p in sweep_levels:
-            mean_acc, mean_power, probs_all, labels_all = evaluate_with_prob(p)
-            tag_acc = f"test_acc_fault_{int(p * 100)}"
-            tag_power = f"test_power_fault_{int(p * 100)}"
+        # Run sweep
+        for mode in sweep_modes:
+            eval_K = 1 if mode == "none" else eval_K_default
+            mean_acc, mean_power, probs_all, labels_all = evaluate_mode(mode, eval_K)
+    
+            tag_acc = f"test_acc_mode_{mode}"
+            tag_power = f"test_power_mode_{mode}"
             self.log(tag_acc, mean_acc, prog_bar=True, on_epoch=True)
             self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
-
-            # Compute micro-averaged OvR ROC if requested and we have predictions
+    
+            # ROC computation (same logic as before)
             if self.compute_roc and (probs_all is not None) and (labels_all is not None):
                 num_classes = probs_all.shape[1]
                 if num_classes == 1:
-                    # single-prob output: cannot do multiclass OvR; compute binary ROC on column 0
-                    # but usually binary case has 2 columns; warn and skip if ambiguous
                     try:
                         fpr, tpr, _ = roc_curve(labels_all, probs_all[:, 0])
                         auc_micro = auc(fpr, tpr)
@@ -302,38 +303,35 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                         fpr, tpr = np.array([]), np.array([])
                         auc_micro = float("nan")
                 elif num_classes == 2:
-                    # binary: use positive-class probability (class index 1)
                     y_score = probs_all[:, 1]
                     fpr, tpr, _ = roc_curve(labels_all, y_score)
                     auc_micro = auc(fpr, tpr)
                 else:
-                    # multiclass - micro-average OvR
                     y_true = label_binarize(labels_all, classes=list(range(num_classes)))
-                    # Flattened roc curve for micro averaging
                     fpr, tpr, _ = roc_curve(y_true.ravel(), probs_all.ravel())
                     auc_micro = roc_auc_score(y_true, probs_all, average='micro', multi_class='ovr')
-
-                tag_auc = f"test_roc_micro_auc_fault_{int(p * 100)}"
-                # for the 0.0 case prefer generic tag without suffix as well
-                if p == 0.0:
+    
+                tag_auc = f"test_roc_micro_auc_mode_{mode}"
+                if mode == "none":
                     self.log("test_roc_micro_auc", float(auc_micro), on_epoch=True, prog_bar=True)
                 self.log(tag_auc, float(auc_micro), on_epoch=True, prog_bar=True)
-                # store curve arrays for later inspection (convert to numpy)
-                self.test_roc_curve_by_level[float(p)] = (fpr, tpr)
-
+                self.test_roc_curve_by_level[mode] = (fpr, tpr)
+    
                 if hasattr(self, "logger") and isinstance(self.logger, pl.loggers.WandbLogger):
                     roc_table = wandb.Table(columns=["fpr", "tpr"], data=list(zip(fpr, tpr)))
                     self.logger.experiment.log({
-                        f"roc_curve_fault_{int(p*100)}": wandb.plot.line(
-                            roc_table, "fpr", "tpr", title=f"ROC Curve (fault={p})"
+                        f"roc_curve_mode_{mode}": wandb.plot.line(
+                            roc_table, "fpr", "tpr", title=f"ROC Curve (mode={mode})"
                         )
                     })
-
-
-        # Restore original fault probability
-        setattr(self.args, "fault_prob", orig_fault_prob)
+    
+        # Restore originals
+        setattr(self.args, "fault_mode", orig_mode)
+        setattr(self.args, "mc_samples", orig_mc)
+        setattr(self.args, "use_interpolation", orig_use_interp)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
+
 
 
     
@@ -467,56 +465,71 @@ class pSpikeGenerator(nn.Module):
         # ensure shapes broadcastable: low/high are (num_static_param,), raw (1,num_static_param)
         return c + r * torch.tanh(raw_params)
 
-    def forward(self, x):
+        def forward(self, x, force_fault: Optional[bool] = None, disable_interpolation: Optional[bool] = None):
         """
-        Interpolated forward that preserves the original generator's output shape.
-        - Selection probability: fault_prob (controls which batch elements are affected)
-        - Mixing strength: fault_mix_alpha (deterministic in your schedule)
-        Returns tensors shaped exactly like the original spike_gen output:
-          - If spike_gen returns (B, T) originally -> we return (B, T)
-          - If spike_gen returns (B, 1, T) originally -> we return (B, T) by squeezing
-          - If any generator returns C>1 channels, we raise a helpful error (you said that shouldn't happen)
+        Forward with optional forced fault behavior.
+         - force_fault: None => caller decided not to force (we default to 'no fault' unless SGLayer passes True).
+                        True  => use faulty surrogate for this entire batch (either mixed or full, depending on interpolation).
+                        False => use main (no fault).
+         - disable_interpolation: override args.use_interpolation for this call.
         """
-        # selection prob & deterministic mix alpha
-        fault_p = float(getattr(self.args, "fault_prob", self.fault_prob))
+        # Determine interpolation usage
+        if disable_interpolation is None:
+            disable_interpolation = not bool(getattr(self.args, "use_interpolation", False))
+
         alpha = float(getattr(self.args, "fault_mix_alpha", 1.0))
         alpha = max(0.0, min(1.0, alpha))
-    
+        if disable_interpolation:
+            alpha_eff = 1.0
+        else:
+            alpha_eff = alpha
+
         batch_size = x.shape[0]
         T = x.shape[2]
         device = self.DEVICE
-    
-        # Build MAIN input (same as original)
+
+        # Build MAIN input as before
         extra_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
         if extra_main is None:
             expanded_main = torch.empty(batch_size, 0, T, device=device)
         else:
             expanded_main = extra_main.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
         x_main = torch.cat([x, expanded_main], dim=1)
-        out_main = self.spike_generator(x_main)  # run main (this also determines expected shape)
-    
-        # If there are no faulty surrogates or no mixing needed, return main EXACTLY as before
-        if fault_p <= 0.0 or len(self.faulty_spike_generators) == 0 or alpha <= 0.0:
-            # Preserve original shape: if out_main has singleton channel dim, squeeze it
+        out_main = self.spike_generator(x_main)
+
+        # If no faulty surrogates exist, always return main
+        if len(self.faulty_spike_generators) == 0:
             if out_main.dim() == 3 and out_main.shape[1] == 1:
-                return out_main.squeeze(1)  # (B, T)
-            return out_main  # (B, T) or otherwise as produced
-    
-        # Build FAULTY input (same shape building rules)
+                return out_main.squeeze(1)
+            return out_main
+
+        # Build FAULTY input as before
         extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
         if extra_faulty is None:
             expanded_faulty = torch.empty(batch_size, 0, T, device=device)
         else:
             expanded_faulty = extra_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
         x_faulty = torch.cat([x, expanded_faulty], dim=1)
-    
-        # Choose one faulty surrogate at random
+
+        # If force_fault is None -> default to no-fault behavior (we rely on SGLayer to explicitly request faults)
+        if force_fault is None:
+            # default no-fault: return main
+            if out_main.dim() == 3 and out_main.shape[1] == 1:
+                return out_main.squeeze(1)
+            return out_main
+
+        # If force_fault is False -> explicitly return main
+        if force_fault is False:
+            if out_main.dim() == 3 and out_main.shape[1] == 1:
+                return out_main.squeeze(1)
+            return out_main
+
+        # If force_fault is True -> use a randomly selected faulty surrogate for this forward
         idx = torch.randint(len(self.faulty_spike_generators), (1,), device=device).item()
         faulty_gen = self.faulty_spike_generators[idx]
         out_faulty = faulty_gen(x_faulty)
-    
-        # Validate shapes of out_main and out_faulty
-        # Acceptable shapes: (B, T) or (B, 1, T). Convert both to (B, C, T) for safe arithmetic.
+
+        # Normalize outputs to (B,1,T)
         def normalize_out(o, which):
             if o.dim() == 2:          # (B, T) -> (B, 1, T)
                 return o.unsqueeze(1)
@@ -525,29 +538,20 @@ class pSpikeGenerator(nn.Module):
                 if TT != T:
                     raise RuntimeError(f"{which} returned time-dim {TT} but input T={T}")
                 if C > 1:
-                    # Fail fast — you said outputs shouldn't have multiple channels
-                    raise RuntimeError(
-                        f"{which} produced {C} output channels (shape={tuple(o.shape)}). "
-                        "Expected single-channel output (B,1,T). Check checkpoint/model_class."
-                    )
-                return o  # (B, 1, T)
+                    raise RuntimeError(f"{which} produced {C} output channels; expected single-channel output.")
+                return o
             else:
                 raise RuntimeError(f"{which} returned unexpected ndim={o.dim()}; shape={tuple(o.shape)}")
-    
+
         out_m = normalize_out(out_main, "main")
         out_f = normalize_out(out_faulty, "faulty")
-    
-        # Per-batch selection mask: which samples are affected (shape (B,1,1))
-        fault_mask = (torch.rand(batch_size, 1, 1, device=device) < fault_p).float()
-        alpha_tensor = fault_mask * alpha  # shape (B,1,1), broadcastable to (B,1,T)
-    
-        # Interpolate (B,1,T)
+
+        # alpha_tensor is broadcasted over time. Since force_fault=True, alpha_val = alpha_eff.
+        alpha_tensor = alpha_eff  # scalar in [0,1]
         out_mixed = (1.0 - alpha_tensor) * out_m + alpha_tensor * out_f  # (B,1,T)
-    
-        # Return with the same outer shape as out_main originally produced:
-        # if out_main was (B, T) -> squeeze channel to (B, T). Otherwise (B,1,T) -> squeeze as well
-        # (we preserve original behavior: squeeze singleton channel)
+
         return out_mixed.squeeze(1)  # (B, T)
+
 
 
     def UpdateArgs(self, args):
@@ -598,12 +602,23 @@ class SGLayer(torch.nn.Module):
         return self.args.DEVICE
 
     def forward(self, x):
+        # Decide the single faulty neuron index according to args.fault_mode
+        fault_mode = getattr(self.args, "fault_mode", "none")
+        N = len(self.SG_Group)
+        if fault_mode == "single" and N > 0:
+            # pick exactly one SG index to be faulty for this forward (uniform)
+            faulty_idx = torch.randint(N, (1,), device=self.DEVICE).item()
+        else:
+            faulty_idx = None
+
         result = []
-        for n in range(len(self.SG_Group)):
+        for n in range(N):
             x_temp = x[:, n, :].unsqueeze(-1)
-            result.append(self.SG_Group[n](x_temp))
-        # result is list length N with each item (B, C_out, T); stacking and permute as before
+            force_fault = (faulty_idx == n)
+            result.append(self.SG_Group[n](x_temp, force_fault=force_fault))
+        # result list length N with each item shaped (B, C_out, T) or (B, T)
         return torch.stack(result).permute(1, 0, 2)
+
 
     def UpdateArgs(self, args):
         self.args = args
@@ -866,8 +881,25 @@ class LFLoss(torch.nn.Module):
         self.loss_fn = LossFN(args)
 
     def forward(self, model, x, label):
-        prediction = model(x)
-        L = []
-        for step in range(prediction.shape[2]):
-            L.append(self.loss_fn(prediction[:, :, step], label))
-        return torch.stack(L).mean() + 0.1 * model.power
+        """
+        Perform K independent forward passes (Monte Carlo) and average the per-instance losses.
+        K is read from model.args.mc_samples (default 1).
+        We also average model.power across the K runs for the regularizer.
+        """
+        K = int(getattr(model.args, "mc_samples", 1))
+        losses = []
+        powers = []
+        for k in range(K):
+            prediction = model(x)  # each call performs an independent draw of the single faulty neuron
+            # temporal loss averaged over time dimension
+            L_steps = []
+            for step in range(prediction.shape[2]):
+                L_steps.append(self.loss_fn(prediction[:, :, step], label))
+            L_k = torch.stack(L_steps).mean()
+            losses.append(L_k)
+            # accumulate the measured power for this forward (model.power is updated in forward)
+            powers.append(model.power.detach().clone())
+
+        mean_loss = torch.stack(losses).mean()
+        mean_power = torch.stack(powers).mean()
+        return mean_loss + 0.1 * mean_power

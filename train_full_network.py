@@ -24,6 +24,7 @@ import torch
 import snntorch as snn
 import argparse
 from typing import List, Dict
+import numpy as np
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
@@ -153,8 +154,20 @@ def parse_args():
 
     p.add_argument("--compute-roc", type=bool, default=True, help="Whether to compute Roc using micro-averaged OvR or not.")
 
-    
-        # static-parameter specification (main vs faulty)
+    # new MC + fault args
+    p.add_argument("--mc-samples", type=int, default=4,
+                   help="Number of Monte-Carlo draws (K) per minibatch during training (default: 4).")
+    p.add_argument("--eval-mc-samples", type=int, default=None,
+                   help="Number of Monte-Carlo draws to use at evaluation/test time. If not set, falls back to --mc-samples.")
+    p.add_argument("--use-interpolation", action="store_true",
+                   help="If set, enable interpolation between clean and faulty surrogates. Default: False (full replacement).")
+    p.add_argument("--warmup-epochs", type=int, default=20,
+                   help="Number of epochs with no faults (warmup). After this, fault_mode='single' (exactly one faulty neuron per forward).")
+
+    p.add_argument("--test-fault-modes", type=str, default="none,single",
+                   help="Comma-separated list of test-time fault modes (e.g., 'none,single'). Default: 'none,single'.")
+
+    # static-parameter specification (main vs faulty)
     p.add_argument(
         "--num-static-param",
         type=str,
@@ -213,18 +226,9 @@ def parse_args():
     p.add_argument("--fast-dev-run", action="store_true", help="Run lightning in fast_dev_run mode (debug)")
     p.add_argument("--stop-on-error", action="store_true", help="Stop on first dataset error (default: continue to next dataset)")
 
-    # Fault-aware training with optional gradual warm-up
-    p.add_argument("--fault-prob", type=float, default=0.0,
-                   help="Legacy flag: base fault probability. If --max-fault-prob is not set, this value is used as the target after warm-up.")
-    p.add_argument("--max-fault-prob", type=float, default=None,
-                   help="Maximum/target fault probability after warm-up phase. If not set, defaults to --fault-prob value.")
-    p.add_argument("--fault-warmup-epochs", type=int, default=30,
-                   help="Number of epochs to train with fault_prob = 0.0 before starting ramp-up. Default: 20")
-    p.add_argument("--fault-ramp-epochs", type=int, default=50,
-                   help="Number of epochs over which to linearly ramp fault_prob from 0 to max_fault_prob. Default: 50")
-    # Test-time sweep
     p.add_argument("--test-fault-levels", type=str, default=None,
-                   help="Comma-separated fault probabilities to evaluate at test time (e.g. '0.0,0.05,0.1'). If not given, defaults to [0.0, training_fault_prob].")
+                   help="(deprecated) Legacy: comma-separated fault probabilities to evaluate at test time. Prefer --test-fault-modes.")
+
     p.add_argument("--faulty-surrogates", type=str, default="",
                     help="Comma-separated list of checkpoint paths for faulty surrogate models. E.g. '/path/f1.ckpt,/path/f2.ckpt'")
     # --------------------------------------------------------------------
@@ -361,47 +365,26 @@ def main():
         else:
             faulty_ckpts_list = []
 
-        # parse test fault-levels as list of floats if provided
-        if args_cli.test_fault_levels:
+        # parse test fault-modes as list of strings if provided
+        if args_cli.test_fault_modes:
             try:
-                test_fault_levels = sorted({float(x.strip()) for x in args_cli.test_fault_levels.split(",") if x.strip()})
-            except ValueError:
-                logger.exception("Could not parse --test-fault-levels '%s'", args_cli.test_fault_levels)
-                test_fault_levels = None
+                test_fault_modes = [s.strip() for s in args_cli.test_fault_modes.split(",") if s.strip()]
+            except Exception:
+                logger.exception("Could not parse --test-fault-modes '%s'", args_cli.test_fault_modes)
+                test_fault_modes = ["none", "single"]
         else:
-            test_fault_levels = None
+            # fallback to legacy levels if provided (best-effort): keep simple default
+            if args_cli.test_fault_levels:
+                logger.warning("--test-fault-levels is deprecated; converting to default modes ['none','single'].")
+            test_fault_modes = ["none", "single"]
 
-        # place parsed test levels into args for the model to read (pSNN.UpdateArgs / test sweep expects args.test_fault_levels)
-        if test_fault_levels is not None:
-            setattr(args, "test_fault_levels", test_fault_levels)
+        # place parsed test modes into args for the model to read (pSNN.UpdateArgs / test sweep expects args.test_fault_modes)
+        setattr(args, "test_fault_modes", test_fault_modes)
 
-         # Determine the actual max fault probability (priority: --max-fault-prob > --fault-prob > 0.0)
-        effective_max_fault_prob = args_cli.fault_prob  # default fallback
-        if args_cli.max_fault_prob is not None:
-            effective_max_fault_prob = args_cli.max_fault_prob
-        elif args_cli.fault_prob > 0.0:
-            effective_max_fault_prob = args_cli.fault_prob
-
-        # Warn if fault injection requested but no faulty surrogates
-        if effective_max_fault_prob > 0.0 and len(faulty_ckpts_list) == 0:
-            logger.warning("Fault injection requested (max_fault_prob=%.3f) but no --faulty-surrogates provided. Faults will be disabled.", effective_max_fault_prob)
-            effective_max_fault_prob = 0.0
-
-        # Pass warm-up settings into args so the Lightning module can read them
-        setattr(args, "max_fault_prob", effective_max_fault_prob)
-        setattr(args, "fault_warmup_epochs", args_cli.fault_warmup_epochs)
-        setattr(args, "fault_ramp_epochs", args_cli.fault_ramp_epochs)
-
-        logger.info("Fault-aware training config: max_fault_prob=%.3f, warmup_epochs=%d, ramp_epochs=%d",
-                    effective_max_fault_prob, args_cli.fault_warmup_epochs, args_cli.fault_ramp_epochs)
-
-        
         # ---------------------------
         # parse static-param CLI input
         # ---------------------------
-                # ---------------------------
-        # Robust static-param parsing
-        # ---------------------------
+        # (the robust parsing code you had — unchanged)
         def _csv_to_floats(s):
             """Return a python list of floats or None. Accepts str, list/tuple, or torch.Tensor."""
             if s is None:
@@ -548,7 +531,9 @@ def main():
                 min_value_static_params=min_value_static_params_arg,
                 max_value_static_params=max_value_static_params_arg,
                 faulty_ckpt_paths=faulty_ckpts_list,
-                fault_prob=args_cli.fault_prob,
+                mc_samples=args_cli.mc_samples,
+                use_interpolation=args_cli.use_interpolation,
+                warmup_epochs=args_cli.warmup_epochs,
             )
 
             logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s)",
@@ -562,7 +547,7 @@ def main():
                 continue
 
         # WandB logger: include dataset id and task in run name to keep separate runs
-        run_name = f"{args_cli.experiment}_FaultProb{args_cli.fault_prob}_{datainfo['dataname']}"
+        run_name = f"{args_cli.experiment}_{datainfo['dataname']}"
         logger.info("Setting up WandB logger (project=%s, run=%s) (dataset=%s task=%s)", args_cli.project, run_name, dset, getattr(args, "task", None))
         wandb_logger = WandbLogger(
             log_model=True,

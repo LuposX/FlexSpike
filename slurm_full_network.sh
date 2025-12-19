@@ -31,15 +31,18 @@ echo "[$(date)] Environment variables exported."
 
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
-python -u train_full_network.py  \
-            --project flexible-printed-network \
-            --experimen PSNN_wSurrGPT_wFaults \
-            --timelimit 10 \
-            --epochs 200 \
-            --lr 0.1 \
-            --lr-min 5e-5 \
-            --hidden 5 5 \
-            --surrogate-class "baseline-gpt" \  # Either: "baseline-gpt", "spiking" or "non-spiking"
-            --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano-gpt-nano-epoch=192-val_loss=0.42.ckpt \
-            --fault-prob 0.2 \
-            --faulty-surrogates surrogate/models/BaselineGPT/
+python -u train_full_network.py \
+  --project flexible-printed-network \
+  --experiment PSNN_wSurrGPT_wFaults \
+  --timelimit 10 \
+  --epochs 200 \
+  --lr 0.1 \
+  --lr-min 5e-5 \
+  --hidden 5 5 \
+  --surrogate-class baseline-gpt \
+  --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano-gpt-nano-epoch=192-val_loss=0.42.ckpt \
+  --faulty-surrogates surrogate/models/BaselineGPT/GPT_Femto_wFaults-gpt-femto-epoch=39-val_loss=0.00.ckpt \
+  --mc-samples 5 \
+  --eval-mc-samples 5 \
+  --warmup-epochs 20 \
+  --test-fault-modes none,single
