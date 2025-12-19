@@ -4,7 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
-#SBATCH --time=30:00:00
+#SBATCH --time=20:00:00
+#SBATCH --mem=128000
 #SBATCH --output=logs_slurm/baseline_%j.out
 #SBATCH --error=logs_slurm/baseline_%j.err
 
@@ -33,9 +34,9 @@ echo "[$(date)] Environment variables exported."
 echo "[$(date)] Starting Python script..."
 python -u 2_train_gpt_baseline_surrogate.py  \
     --project-name flexible-surrogate \
-    --experiment-name GPT \
+    --experiment-name GPT_Femto \
     --max-epochs 200 \
-    --batch-size 2048 \
+    --batch-size 256 \
     --model-type "gpt-femto" \
     --patience 20 \
     --lr 0.005 \

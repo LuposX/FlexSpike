@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=src-norm
-#SBATCH --partition=cpu
+#SBATCH --partition=cpu_il
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
