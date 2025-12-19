@@ -44,4 +44,5 @@ python -u 4_train_non_spiking_surrogate.py  \
     --early-stopping-patience 20 \
     --loss-fn "mse" \
     --lr 0.005 \
+    --data data/dataset_v4.ds \
     --logging-directory /scratch/$USER/wandb_logs

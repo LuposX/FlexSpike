@@ -40,4 +40,5 @@ python -u 2_train_gpt_baseline_surrogate.py  \
     --patience 20 \
     --lr 0.005 \
     --num-runs 3 \
+    --data data/dataset_v4.ds \
     --logging-directory /scratch/$USER/wandb_logs
