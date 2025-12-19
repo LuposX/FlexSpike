@@ -465,7 +465,7 @@ class pSpikeGenerator(nn.Module):
         # ensure shapes broadcastable: low/high are (num_static_param,), raw (1,num_static_param)
         return c + r * torch.tanh(raw_params)
 
-        def forward(self, x, force_fault: Optional[bool] = None, disable_interpolation: Optional[bool] = None):
+    def forward(self, x, force_fault: Optional[bool] = None, disable_interpolation: Optional[bool] = None):
         """
         Forward with optional forced fault behavior.
          - force_fault: None => caller decided not to force (we default to 'no fault' unless SGLayer passes True).
