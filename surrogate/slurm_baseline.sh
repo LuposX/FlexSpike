@@ -32,11 +32,12 @@ echo "[$(date)] Environment variables exported."
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
 python -u 2_train_gpt_baseline_surrogate.py  \
-    --project-name surrogate-confidence \
+    --project-name flexible-surrogate \
     --experiment-name GPT \
-    --max-epochs 80 \
+    --max-epochs 200 \
     --batch-size 2048 \
     --model-type "gpt-femto" \
     --patience 20 \
-    --lr 0.05 \
+    --lr 0.005 \
+    --num-runs 3 \
     --logging-directory /scratch/$USER/wandb_logs

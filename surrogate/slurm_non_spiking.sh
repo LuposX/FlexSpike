@@ -34,7 +34,7 @@ echo "[$(date)] Starting Python script..."
 python -u 4_train_non_spiking_surrogate.py  \
     --project-name surrogate-confidence \
     --experiment-name RNN \
-    --max-epochs 80 \
+    --max-epochs 200 \
     --layer-skip 0 \
     --batch-size 2048 \
     --num-hidden 64 \
