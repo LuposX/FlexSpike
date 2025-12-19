@@ -150,6 +150,10 @@ def parse_args():
     p.add_argument("--device", type=str, choices=["cpu", "gpu"], default="cpu", help="Device to use")
     p.add_argument("--epochs", type=int, default=200, help="Number of training epochs (overrides config EPOCH)")
     p.add_argument("--timelimit", type=float, default=10, help="TIMELIMITATION value")
+
+    p.add_argument("--compute-roc", type=bool, default=True, help="Whether to compute Roc using micro-averaged OvR or not.")
+
+    
         # static-parameter specification (main vs faulty)
     p.add_argument(
         "--num-static-param",

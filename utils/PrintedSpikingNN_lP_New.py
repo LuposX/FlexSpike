@@ -1,11 +1,15 @@
 import os 
 import torch
+import wandb
 import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
 from typing import Any, List, Optional, Union, Tuple
 
 from utils.evaluation import Evaluator
+
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 # ===============================================================================
 # ===============================================================================
@@ -80,6 +84,14 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
+
+        # ROC computation toggle (only used at test time)
+        self.compute_roc = bool(getattr(self.args, "compute_roc", True))
+
+        # storage for last-run ROC curves per tested fault level:
+        # will be dict mapping prob -> (fpr_array, tpr_array)
+        self.test_roc_curve_by_level = {}
+
 
     def forward(self, x):
         return self.network(x)
@@ -196,7 +208,8 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
     def on_test_epoch_end(self):
         """
         After the normal test epoch, run additional evaluations (sweep) with different
-        fault probabilities. Logs metrics for each fault level.
+        fault probabilities. Logs metrics for each fault level and computes micro-averaged
+        one-vs-rest ROC AUC for each level (if enabled).
         """
         # Get original fault probability to restore later
         orig_fault_prob = float(getattr(self.args, "fault_prob", 0.0))
@@ -211,7 +224,12 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         # Remove 0.0 from the sweep since we already logged it in test_step
         levels = [p for p in levels if p > 0.0]
 
-        if not levels:
+        if not levels and not self.compute_roc:
+            # nothing to sweep and no ROC requested
+            # still restore original fault prob just in case
+            setattr(self.args, "fault_prob", orig_fault_prob)
+            if hasattr(self.network, "UpdateArgs"):
+                self.network.UpdateArgs(self.args)
             return  # nothing to sweep
         
         # Helper to evaluate the entire test_loader with a given fault probability
@@ -225,6 +243,9 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             acc_sum = 0.0
             power_sum = 0.0
             total_samples = 0
+
+            probs_list = []
+            labels_list = []
     
             with torch.no_grad():
                 for xb, yb in self.test_loader:
@@ -235,23 +256,85 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                     acc_sum += float(batch_acc) * batch_n
                     power_sum += float(batch_power) * batch_n
                     total_samples += batch_n
+
+                    # Collect probabilities for ROC (aggregate over time by mean)
+                    preds = self.network(xb)  # (B, C, T) or (B, T)
+                    if preds.dim() == 2:
+                        logits = preds.unsqueeze(1)  # (B,1,T)
+                    else:
+                        logits = preds  # (B,C,T)
+                    avg_logits = logits.mean(dim=2)  # (B, C)
+                    probs = torch.softmax(avg_logits, dim=1).detach().cpu()
+                    probs_list.append(probs)
+                    labels_list.append(yb.detach().cpu())
     
             mean_acc = acc_sum / (total_samples + 1e-12)
             mean_power = power_sum / (total_samples + 1e-12)
-            return mean_acc, mean_power
+            probs_all = torch.cat(probs_list, dim=0).numpy() if len(probs_list) else None
+            labels_all = torch.cat(labels_list, dim=0).numpy() if len(labels_list) else None
+            return mean_acc, mean_power, probs_all, labels_all
     
-        # Run the sweep once
-        for p in levels:
-            mean_acc, mean_power = evaluate_with_prob(p)
+        # Run the sweep once and compute ROC per level (if requested)
+        # Also include the baseline orig_fault_prob (if not zero) and/or 0.0 as needed
+        sweep_levels = [0.0] + levels if 0.0 not in levels else levels
+        # ensure orig_fault_prob included so we evaluate original if it wasn't 0
+        if orig_fault_prob not in sweep_levels:
+            sweep_levels.append(orig_fault_prob)
+        sweep_levels = sorted(set(sweep_levels))
+
+        for p in sweep_levels:
+            mean_acc, mean_power, probs_all, labels_all = evaluate_with_prob(p)
             tag_acc = f"test_acc_fault_{int(p * 100)}"
             tag_power = f"test_power_fault_{int(p * 100)}"
             self.log(tag_acc, mean_acc, prog_bar=True, on_epoch=True)
             self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
-    
+
+            # Compute micro-averaged OvR ROC if requested and we have predictions
+            if self.compute_roc and (probs_all is not None) and (labels_all is not None):
+                num_classes = probs_all.shape[1]
+                if num_classes == 1:
+                    # single-prob output: cannot do multiclass OvR; compute binary ROC on column 0
+                    # but usually binary case has 2 columns; warn and skip if ambiguous
+                    try:
+                        fpr, tpr, _ = roc_curve(labels_all, probs_all[:, 0])
+                        auc_micro = auc(fpr, tpr)
+                    except Exception:
+                        fpr, tpr = np.array([]), np.array([])
+                        auc_micro = float("nan")
+                elif num_classes == 2:
+                    # binary: use positive-class probability (class index 1)
+                    y_score = probs_all[:, 1]
+                    fpr, tpr, _ = roc_curve(labels_all, y_score)
+                    auc_micro = auc(fpr, tpr)
+                else:
+                    # multiclass - micro-average OvR
+                    y_true = label_binarize(labels_all, classes=list(range(num_classes)))
+                    # Flattened roc curve for micro averaging
+                    fpr, tpr, _ = roc_curve(y_true.ravel(), probs_all.ravel())
+                    auc_micro = roc_auc_score(y_true, probs_all, average='micro', multi_class='ovr')
+
+                tag_auc = f"test_roc_micro_auc_fault_{int(p * 100)}"
+                # for the 0.0 case prefer generic tag without suffix as well
+                if p == 0.0:
+                    self.log("test_roc_micro_auc", float(auc_micro), on_epoch=True, prog_bar=True)
+                self.log(tag_auc, float(auc_micro), on_epoch=True, prog_bar=True)
+                # store curve arrays for later inspection (convert to numpy)
+                self.test_roc_curve_by_level[float(p)] = (fpr, tpr)
+
+                if hasattr(self, "logger") and isinstance(self.logger, pl.loggers.WandbLogger):
+                    roc_table = wandb.Table(columns=["fpr", "tpr"], data=list(zip(fpr, tpr)))
+                    self.logger.experiment.log({
+                        f"roc_curve_fault_{int(p*100)}": wandb.plot.line(
+                            roc_table, "fpr", "tpr", title=f"ROC Curve (fault={p})"
+                        )
+                    })
+
+
         # Restore original fault probability
         setattr(self.args, "fault_prob", orig_fault_prob)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
+
 
     
     def UpdateArgs(self, args):
