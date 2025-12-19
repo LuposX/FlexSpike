@@ -32,7 +32,7 @@ echo "[$(date)] Environment variables exported."
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
 python -u 2_train_spiking_surrogate.py  \
-    --project-name surrogate-confidence \
+    --project-name flexible-surrogate \
     --experiment-name SRC \
     --max-epochs 200 \
     --layer-skip 2 \
