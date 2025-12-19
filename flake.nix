@@ -35,6 +35,7 @@
               torchmetrics
 	      wandb
               scipy
+              scikit-learn
 	      plotly
 
               # Self built
