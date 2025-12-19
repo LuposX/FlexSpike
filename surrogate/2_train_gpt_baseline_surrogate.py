@@ -24,8 +24,11 @@ from pytorch_lightning.utilities.model_summary import ModelSummary
 # adjust this import to match your package layout
 from utils.MyTransformer_lP import GPTLightning, GPT
 
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
 
 
 def str2bool(v):
