@@ -33,19 +33,19 @@ echo "[$(date)] Environment variables exported."
 echo "[$(date)] Starting Python script..."
 python -u 2_train_spiking_surrogate.py  \
     --project-name surrogate-confidence \
-    --experiment-name SRC_ImpGrad \
-    --max-epochs 80 \
+    --experiment-name SRC \
+    --max-epochs 200 \
     --layer-skip 2 \
     --beta 0 \
-    --batch-size 2048 \
-    --num-hidden 64 \
-    --num-hidden-layers 4 \
+    --batch-size 256 \
+    --num-hidden 128 \
+    --num-hidden-layers 2 \
     --neuron-type "SRC" \
     --num-runs 3 \
-    --use-layernorm True \
+    --use-layernorm False \
     --use-bntt False \
     --early-stopping-patience 20 \
     --loss-fn "mse" \
-    --lr 0.1 \
+    --lr 0.0025 \
     --src-config 'alpha=0.9,rho=6.0,r=2.0,rs=-7.0,bh_init=-2.0,bh_max=-3.0,z=0,zhyp_s=0.9,zdep_s=0,detach_rec=False,relu_bypass=True' \
     --logging-directory /scratch/$USER/wandb_logs
