@@ -38,7 +38,14 @@ def str2bool(v):
     raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-def main(args):
+def main(args, run_idx: int = 1, seed: int = 42, run_name: str | None = None):
+    """
+    Single run of training. `run_idx` is 1-based. `seed` is the random seed used for this run.
+    `run_name` (if provided) will be used as the experiment name (so it can include _runN).
+    """
+    # if a run-specific name was provided, use it; else default to args.experiment_name
+    experiment_name = run_name if run_name is not None else args.experiment_name
+
     logger.info("Loading dataset from %s", args.data)
     data = torch.load(args.data)
 
@@ -74,9 +81,22 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=args.pin_memory,
     )
-    torch.manual_seed(42)
-    np.random.seed(42)
-    logger.info("Set random seed to %s", 42)
+
+    # set seeds (per-run)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    try:
+        import random as _py_random
+        _py_random.seed(seed)
+    except Exception:
+        pass
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.manual_seed_all(seed)
+        except Exception:
+            pass
+
+    logger.info("Set random seed to %s for run %d", seed, run_idx)
 
     # Build model config
     model_config = GPT.get_default_config()
@@ -86,12 +106,14 @@ def main(args):
     model_config.block_size = X_train.shape[1]
     model = GPTLightning(model_config, lr=args.lr, max_epochs=args.max_epochs)
 
-    # logging directory setup
+    # logging directory setup (per run)
     script_dir = os.getcwd()
-    logging_directory = os.path.join(script_dir, args.logging_directory)
-    logging_directory = os.path.abspath(logging_directory)
-    os.makedirs(logging_directory, exist_ok=True)
-    os.environ["WANDB_DIR"] = logging_directory
+    base_logging_directory = os.path.join(script_dir, args.logging_directory)
+    base_logging_directory = os.path.abspath(base_logging_directory)
+    # create a per-run logging directory so runs don't overwrite each other
+    run_logging_directory = os.path.join(base_logging_directory, experiment_name)
+    os.makedirs(run_logging_directory, exist_ok=True)
+    os.environ["WANDB_DIR"] = run_logging_directory
 
     summary = ModelSummary(model, max_depth=1)
     num_params = summary.total_parameters
@@ -101,12 +123,12 @@ def main(args):
     # WandB logger
     wandb_logger = None
     if not args.no_wandb:
-        logger.info("Initializing WandbLogger (project=%s name=%s) at %s", args.project_name, args.experiment_name, logging_directory)
+        logger.info("Initializing WandbLogger (project=%s name=%s) at %s", args.project_name, experiment_name, run_logging_directory)
         wandb_logger = WandbLogger(
             log_model=True,
             project=args.project_name,
-            name=args.experiment_name,
-            save_dir=logging_directory,
+            name=experiment_name,
+            save_dir=run_logging_directory,
         )
         try:
             wandb_logger.experiment.summary["trainable_parameters"] = trainable_params
@@ -126,14 +148,20 @@ def main(args):
     else:
         logger.info("WandB disabled (--no-wandb).")
 
+    # Make a run-specific checkpoint directory so runs don't overwrite each other
+    checkpoint_dir_for_run = args.checkpoint_dir
+    if checkpoint_dir_for_run:
+        checkpoint_dir_for_run = os.path.join(checkpoint_dir_for_run, experiment_name)
+        os.makedirs(checkpoint_dir_for_run, exist_ok=True)
+
     # Callbacks
     checkpoint_callback = ModelCheckpoint(
         monitor=args.monitor,
         mode=args.monitor_mode,
         save_top_k=args.save_top_k,
-        filename=f"{args.experiment_name}-{args.model_type}-{{epoch:02d}}-{{{args.monitor}:.2f}}",
+        filename=f"{experiment_name}-{args.model_type}-{{epoch:02d}}-{{{args.monitor}:.2f}}",
         save_last=True,
-        dirpath=args.checkpoint_dir if args.checkpoint_dir else None,
+        dirpath=checkpoint_dir_for_run if checkpoint_dir_for_run else None,
     )
 
     early_stop_callback = EarlyStopping(monitor=args.monitor, patience=args.patience, mode=args.monitor_mode, verbose=True)
@@ -148,7 +176,7 @@ def main(args):
         callbacks=[checkpoint_callback, early_stop_callback],
         logger=wandb_logger if not args.no_wandb else None,
         log_every_n_steps=args.log_every_n_steps,
-        default_root_dir=logging_directory,
+        default_root_dir=run_logging_directory,
     )
 
 
@@ -161,7 +189,7 @@ def main(args):
             logger.warning("torch.compile failed: %s", e)
 
     # Train
-    logger.info("Starting training for up to %d epochs", args.max_epochs)
+    logger.info("Starting training for up to %d epochs (run %d, seed %d)", args.max_epochs, run_idx, seed)
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
     # finalize wandb
@@ -184,7 +212,7 @@ if __name__ == "__main__":
 
     # Data and dataloader
     parser.add_argument("--data", type=str, default="./data/dataset.ds", help="Path to dataset (torch .pt/.ds) file.")
-    parser.add_argument("--num-static-params", type=int, default="6", help="Number static params the dataset has (V2 has 6, V3 has 0, V4 has 4).")
+    parser.add_argument("--num-static-params", type=int, default=6, help="Number static params the dataset has (V2 has 6, V3 has 0, V4 has 4).")
     parser.add_argument("--batch-size", type=int, default=2048, help="Batch size for all dataloaders.")
     parser.add_argument("--num-workers", type=int, default=4, help="num_workers for DataLoader.")
     parser.add_argument("--pin-memory", type=str2bool, default=False, help="Whether to use pin_memory in DataLoader (true/false).")
@@ -208,7 +236,11 @@ if __name__ == "__main__":
     parser.add_argument("--model-type", type=str, default="pico-test", help="model_config.model_type to set.")
     parser.add_argument("--torch-compile", dest="torch_compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", dest="use_gpu_if_available", action="store_true", help="Use GPU if available (default: off).")
-    
+
+    # Multi-run / seeding (new)
+    parser.add_argument("--num-runs", type=int, default=1, help="Number of repeated runs to execute (each run uses base_seed + i).")
+    parser.add_argument("--base-seed", type=int, default=42, help="Base seed for the first run. Subsequent runs use base_seed+1, base_seed+2, ...")
+
     # Misc
     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Trainer.log_every_n_steps")
 
@@ -220,4 +252,11 @@ if __name__ == "__main__":
     if args.experiment_name is None:
         args.experiment_name = args.model_type
 
-    main(args)
+    # Run loop: run runs sequentially with incremented seeds and run name suffixes
+    for i in range(args.num_runs):
+        run_idx = i + 1  # 1-based
+        seed = args.base_seed + i
+        run_name = f"{args.experiment_name}_run{run_idx}" if args.num_runs > 1 else args.experiment_name
+
+        logger.info("Starting run %d/%d with seed %d and run name '%s'", run_idx, args.num_runs, seed, run_name)
+        main(args, run_idx=run_idx, seed=seed, run_name=run_name)
