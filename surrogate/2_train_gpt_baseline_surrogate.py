@@ -24,10 +24,11 @@ from pytorch_lightning.utilities.model_summary import ModelSummary
 # adjust this import to match your package layout
 from utils.MyTransformer_lP import GPTLightning, GPT
 
+from typing import Dict, Any, Optional
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
 
 
 
@@ -41,7 +42,7 @@ def str2bool(v):
     raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-def main(args, run_idx: int = 1, seed: int = 42, run_name: str | None = None):
+def main(args, run_idx: int = 1, seed: int = 42, run_name: Optional[str] = None):
     """
     Single run of training. `run_idx` is 1-based. `seed` is the random seed used for this run.
     `run_name` (if provided) will be used as the experiment name (so it can include _runN).
