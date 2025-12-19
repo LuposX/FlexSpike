@@ -48,5 +48,6 @@ python -u 2_train_spiking_surrogate.py  \
     --loss-fn "mse" \
     --lr 0.0025 \
     --data data/dataset_v4.ds \
+    --num_static_params 4 \
     --src-config 'alpha=0.9,rho=6.0,r=2.0,rs=-7.0,bh_init=-2.0,bh_max=-3.0,z=0,zhyp_s=0.9,zdep_s=0,detach_rec=False,relu_bypass=True' \
     --logging-directory /scratch/$USER/wandb_logs

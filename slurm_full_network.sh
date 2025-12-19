@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
 #SBATCH --time=30:00:00
 #SBATCH --output=logs_slurm/full_network_%j.out
-#SBATCH --error=logs_slurm/full_network%j.err
+#SBATCH --error=logs_slurm/full_network_%j.err
 
 echo "[$(date)] SLURM job starting..."    # timestamped start message
 echo "Job ID: $SLURM_JOB_ID, Node: $SLURM_NODELIST"

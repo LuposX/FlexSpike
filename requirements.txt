@@ -12,6 +12,6 @@ lightning
 torchmetrics
 wandb
 scipy
-sklearn
+scikit-learn
 plotly
 snntorch
