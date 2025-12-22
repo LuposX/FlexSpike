@@ -124,10 +124,10 @@ def main(args, run_idx: int = 1, seed: int = 42, run_name: Optional[str] = None)
     trainable_params = summary.trainable_parameters
     logger.info("Model has %d trainable parameters (total %d)", trainable_params, num_params)
 
-    # WandB logger
     wandb_logger = None
     if not args.no_wandb:
         logger.info("Initializing WandbLogger (project=%s name=%s) at %s", args.project_name, experiment_name, run_logging_directory)
+        # IMPORTANT: init_kwargs={"reinit": True} forces a fresh wandb run when running multiple runs in one process
         wandb_logger = WandbLogger(
             log_model=True,
             project=args.project_name,
@@ -151,6 +151,7 @@ def main(args, run_idx: int = 1, seed: int = 42, run_name: Optional[str] = None)
             logger.warning("wandb_logger.experiment.log_code() failed: %s", e)
     else:
         logger.info("WandB disabled (--no-wandb).")
+
 
     # Make a run-specific checkpoint directory so runs don't overwrite each other
     checkpoint_dir_for_run = args.checkpoint_dir
@@ -196,16 +197,21 @@ def main(args, run_idx: int = 1, seed: int = 42, run_name: Optional[str] = None)
     logger.info("Starting training for up to %d epochs (run %d, seed %d)", args.max_epochs, run_idx, seed)
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
-    # finalize wandb
-    if wandb_logger and not args.no_wandb:
-        try:
-            wandb_logger.finalize("success")
-        except Exception as e:
-            logger.warning("wandb_logger.finalize() failed: %s", e)
-
     # Test if requested
     logger.info("Running trainer.test()")
     trainer.test(model, dataloaders=test_loader)
+
+    # finalize wandb: ensure the wandb run is closed so subsequent runs start fresh
+    if wandb_logger and not args.no_wandb:
+        try:
+            # prefer explicit SDK finish; some versions expose experiment.finish()
+            try:
+                wandb_logger.experiment.finish()
+            except Exception:
+                # fallback
+                wandb.finish()
+        except Exception as e:
+            logger.warning("wandb finish/finalize failed: %s", e)
 
     logger.info("Best checkpoint saved at: %s", checkpoint_callback.best_model_path or "N/A")
     print("Best checkpoint saved at:", checkpoint_callback.best_model_path or "N/A")

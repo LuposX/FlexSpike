@@ -11,6 +11,7 @@ pLSNN/*
 wandb/*
 models/*
 surrogate/lightning_logs/*
+surrogate/processed/*
 surrogate/pLSNN/*
 surrogate/models/*
 surrogate/wandb/*
