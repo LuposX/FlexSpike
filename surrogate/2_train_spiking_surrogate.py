@@ -160,6 +160,7 @@ def main(args):
     logger.info("Using accelerator=%s", accelerator)
 
     # Run loop for multiple seeds
+        # Run loop for multiple seeds
     for run_idx in range(args.num_runs):
         seed = args.base_seed + run_idx
         logger.info("=== Starting run %d/%d with seed %d ===", run_idx + 1, args.num_runs, seed)
@@ -176,11 +177,44 @@ def main(args):
         # Update experiment name for this run
         run_name = f"{args.experiment_name}_run{run_idx+1}"
 
-        # WandB logger
+        # Make a run-specific checkpoint directory so runs don't overwrite each other
+        run_checkpoint_dir = os.path.join(args.checkpoint_path, run_name)
+        os.makedirs(run_checkpoint_dir, exist_ok=True)
+
+        # Create a ModelCheckpoint callback for this run (so filename/dirpath can include run info)
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=run_checkpoint_dir,
+            filename=f"{args.experiment_name}-run{run_idx+1}" + "-{epoch:02d}-{val_loss:.2f}",
+            save_top_k=1,
+            monitor=args.monitor,
+            mode=args.monitor_mode,
+        )
+
+        # WandB logger: ensure any previous run is finished, then create a new logger
         wandb_logger = None
         if not args.no_wandb:
-            wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=run_name, save_dir=logging_directory)
+            # Close any previous run in this process (important when running multiple runs sequentially)
+            try:
+                wandb.finish()
+            except Exception:
+                pass
 
+            wandb_logger = WandbLogger(
+                log_model=True,
+                project=args.project_name,
+                name=run_name,
+                save_dir=logging_directory,
+            )
+
+            # optional metadata
+            try:
+                # safe attempt to set initial tags/notes etc.
+                # wandb_logger.experiment.config.update({"seed": seed}, allow_val_change=True)
+                pass
+            except Exception:
+                pass
+
+        # Callbacks list (include early stopping if requested)
         callbacks = [checkpoint_callback]
         if args.early_stopping:
             early_stopping_callback = EarlyStopping(
@@ -192,8 +226,7 @@ def main(args):
             )
             callbacks.append(early_stopping_callback)
 
-
-        # Instantiate model
+        # Instantiate model (unchanged)
         model = SpikingNetwork(
             optimizer_class=optimizer_class,
             optimizer_kwargs=optimizer_kwargs,
@@ -238,24 +271,26 @@ def main(args):
             logger=wandb_logger if not args.no_wandb else None,
             callbacks=callbacks,
             log_every_n_steps=args.log_every_n_steps,
+            default_root_dir=run_checkpoint_dir,  # ensures trainer checkpoints/logs are per-run
         )
 
         # Train
         trainer.fit(model)
 
         logger.info("Starting test for run %d using best checkpoint", run_idx + 1)
-        trainer.test(
-            model=model,  # optional, will load checkpoint automatically if ckpt_path="best"
-            ckpt_path="best"
-        )
+        trainer.test(model=model, ckpt_path="best")
 
-        # Finalize WandB logger
+        # Finalize WandB logger (close the run so the next iteration starts fresh)
         if wandb_logger and not args.no_wandb:
             try:
-                wandb_logger.finalize("success")
-                wandb.finish()
+                # prefer explicit SDK finish (safe across versions)
+                try:
+                    wandb_logger.experiment.finish()
+                except Exception:
+                    # fallback
+                    wandb.finish()
             except Exception as e:
-                logger.warning("wandb_logger.finalize() failed: %s", e)
+                logger.warning("wandb.experiment.finish() failed: %s", e)
 
         logger.info("Run %d finished. Best checkpoint: %s", run_idx + 1, checkpoint_callback.best_model_path or "N/A")
 

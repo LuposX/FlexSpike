@@ -388,14 +388,16 @@ def main(args):
         except Exception as e:
             logger.error("Trainer.test failed for run %d: %s", run_idx + 1, e)
 
-        if wandb_logger and not local_args.get("no_wandb"):
+        if wandb_logger:
             try:
-                # Only finalize if we created it ourselves, but calling it safe mostly harmless
-                if not active_run:
-                    logger.info("Finalizing wandb logger for run %d", run_idx + 1)
-                    wandb_logger.finalize("success")
+                # prefer explicit SDK finish (safe across versions)
+                try:
+                    wandb_logger.experiment.finish()
+                except Exception:
+                    # fallback
+                    wandb.finish()
             except Exception as e:
-                logger.warning("wandb_logger.finalize() failed: %s", e)
+                logger.warning("wandb.experiment.finish() failed: %s", e)
 
         logger.info("Run %d finished.", run_idx + 1)
 
