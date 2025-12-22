@@ -3,15 +3,22 @@
 train_snn.py
 
 Usage examples:
+  # With static faulty neurons (output constant values)
   python train_snn.py --epochs 50 --device gpu --experiment myrun --project Spike-Synth-Full \
       --checkpoint-dir models/SRNN --surrogate-ckpt surrogate/models/SRNN/testspike_model-epoch=09-val_loss=0.09-v3.ckpt \
-      --hidden 128 64
+      --hidden 128 64 --faulty-static-values "3.0,0.0,5.0"
+
+  # With both dynamic (checkpoint) and static faulty neurons
+  python train_snn.py --epochs 50 --device gpu --experiment myrun --project Spike-Synth-Full \
+      --checkpoint-dir models/SRNN --surrogate-ckpt surrogate/models/SRNN/testspike_model-epoch=09-val_loss=0.09-v3.ckpt \
+      --hidden 128 64 --faulty-surrogates "faulty1.ckpt,faulty2.ckpt" --faulty-static-values "3.0,0.0,5.0"
 
   # multiple datasets across lists:
-  python train_snn.py --datasets "temporized:0, temporal:2, normal:5" --experiment multi --project Spike-Synth-Full
+  python train_snn.py --datasets "temporized:0, temporal:2, normal:5" --experiment multi --project Spike-Synth-Full \
+      --faulty-static-values "2.0,4.0"
 
   # ranges:
-  python train_snn.py --datasets "temporized:0-2, temporal:4-5" --experiment multi
+  python train_snn.py --datasets "temporized:0-2, temporal:4-5" --experiment multi --faulty-static-values "1.0"
 
 See --help for all options.
 """
@@ -137,6 +144,16 @@ def parse_dataset_list(s: str) -> List[Dict]:
     return result
 
 
+def parse_float_list(s: str) -> List[float]:
+    """Parse a comma-separated string of floats."""
+    if s is None or s.strip() == "":
+        return []
+    try:
+        return [float(x.strip()) for x in s.split(",") if x.strip()]
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"Invalid float list: {s}. Error: {e}")
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="Train a Printed Spiking Network (from notebook->script)")
 
@@ -203,7 +220,6 @@ def parse_args():
         help="Comma-separated list of maximum static-param values for the faulty surrogate. If omitted, main values are reused (expanded/truncated if lengths differ).",
     )
 
-
     # optimizer / lr
     p.add_argument("--lr", type=float, default=0.001, help="Initial learning rate")
     p.add_argument("--lr-min", type=float, default=1e-6, help="Minimum learning rate")
@@ -231,7 +247,10 @@ def parse_args():
 
     p.add_argument("--faulty-surrogates", type=str, default="",
                     help="Comma-separated list of checkpoint paths for faulty surrogate models. E.g. '/path/f1.ckpt,/path/f2.ckpt'")
-    # --------------------------------------------------------------------
+    
+    # NEW: Static faulty neurons argument
+    p.add_argument("--faulty-static-values", type=parse_float_list, default=[],
+                    help="Comma-separated list of constant output values for static faulty neurons. E.g. '3.0,0.0,5.0'")
 
     return p.parse_args()
 
@@ -260,6 +279,7 @@ def main():
     base_checkpoint_dir = args_cli.checkpoint_dir
 
     logger.info("Will run dataset specs in sequence: %s", dataset_specs)
+    logger.info("Faulty static values: %s", args_cli.faulty_static_values)
 
     # We'll process each dataset spec sequentially
     for spec in dataset_specs:
@@ -364,6 +384,9 @@ def main():
             faulty_ckpts_list = [p.strip() for p in args_cli.faulty_surrogates.split(",") if p.strip()]
         else:
             faulty_ckpts_list = []
+
+        # NEW: Get static faulty values from command line
+        faulty_static_values = args_cli.faulty_static_values
 
         # parse test fault-modes as list of strings if provided
         if args_cli.test_fault_modes:
@@ -517,6 +540,7 @@ def main():
         hidden_list = args.hidden if getattr(args, "hidden", None) else []
         topology = [datainfo['N_feature']] + hidden_list + [datainfo['N_class']]
         logger.info("Instantiating PrintedSpikingNetwork with topology: %s (dataset=%s task=%s)", topology, dset, getattr(args, "task", None))
+        
         try:
             psnn = pSNN.LightningPrintedSpikingNetwork(
                 topology=topology,
@@ -531,6 +555,7 @@ def main():
                 min_value_static_params=min_value_static_params_arg,
                 max_value_static_params=max_value_static_params_arg,
                 faulty_ckpt_paths=faulty_ckpts_list,
+                faulty_static_values=faulty_static_values,  # NEW: Pass static faulty values
                 mc_samples=args_cli.mc_samples,
                 use_interpolation=args_cli.use_interpolation,
                 warmup_epochs=args_cli.warmup_epochs,
@@ -538,6 +563,8 @@ def main():
 
             logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s)",
                         surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None))
+            logger.info("Dynamic faulty neurons: %d, Static faulty neurons: %d", 
+                       len(faulty_ckpts_list), len(faulty_static_values))
         except Exception as e:
             logger.exception("Failed to instantiate PrintedSpikingNetwork for dataset %s: %s", dset, e)
             if args_cli.stop_on_error:

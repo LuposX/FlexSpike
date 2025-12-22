@@ -34,6 +34,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  train_dataset=None,
                  valid_dataset=None,
                  faulty_ckpt_paths: Optional[List[str]] = None,  # list of faulty surrogate ckpts
+                 faulty_static_values: Optional[List[float]] = None,  # NEW: list of constant output values for static faulty neurons
                  # new args
                  mc_samples: int = 1,                              # K: MC draws per minibatch
                  use_interpolation: bool = False,                  # allow disabling interpolation
@@ -66,12 +67,16 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         # keep older fault-related fields for backward compatibility but we won't use them
         setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
 
+        setattr(args, "faulty_static_values", faulty_static_values if faulty_static_values is not None else [])
+
         self.args = args
         self.network = PrintedSpikingNeuralNetwork(
             topology, args, model_class, ckpt_path,
             surrogate_gradient, train_dataset, valid_dataset,
             num_static_param, min_value_static_params, max_value_static_params,
-            faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=0.0  # pass 0.0 to keep legacy param present
+            faulty_ckpt_paths=faulty_ckpt_paths, 
+            faulty_static_values=faulty_static_values,  # NEW: Pass static values
+            fault_prob=0.0  # pass 0.0 to keep legacy param present
         )
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
@@ -366,6 +371,7 @@ class pSpikeGenerator(nn.Module):
                  min_value_static_params,
                  max_value_static_params,
                  faulty_ckpt_paths: Optional[List[str]] = None,
+                 faulty_static_values: Optional[List[float]] = None,  # NEW: list of constant values for static faulty neurons
                  fault_prob: float = 0.0):
         super().__init__()
         self.args = args
@@ -418,6 +424,18 @@ class pSpikeGenerator(nn.Module):
                 param.requires_grad = False
             self.faulty_spike_generators.append(fgen)
 
+        # NEW: Store static faulty values
+        self.faulty_static_values = faulty_static_values or getattr(args, "faulty_static_values", []) or []
+        # Convert to tensor for easier handling
+        if self.faulty_static_values:
+            self.faulty_static_values_tensor = torch.tensor(
+                self.faulty_static_values, 
+                device=self.DEVICE, 
+                dtype=torch.float32
+            )
+        else:
+            self.faulty_static_values_tensor = torch.tensor([], device=self.DEVICE, dtype=torch.float32)
+
         # fault probability (per-neuron replacement prob)
         self.fault_prob = float(fault_prob) if fault_prob is not None else float(getattr(args, "fault_prob", 0.0))
 
@@ -427,7 +445,8 @@ class pSpikeGenerator(nn.Module):
                                 if self.num_static_param_main > 0 else None
         # faulty raw params (shared for all faulty surrogates)
         self.raw_params_faulty = nn.Parameter(torch.randn(1, self.num_static_param_faulty, device=self.DEVICE)) \
-                                 if (self.num_static_param_faulty > 0 and len(self.faulty_spike_generators) > 0) else None
+                                 if (self.num_static_param_faulty > 0 and 
+                                     (len(self.faulty_spike_generators) > 0 or len(self.faulty_static_values) > 0)) else None
 
         # Ensure min/max are tensors on the right device and shaped (num_static_param,)
         min_main, min_faulty = _split_pair(min_value_static_params, "min_value_static_params")
@@ -446,7 +465,8 @@ class pSpikeGenerator(nn.Module):
 
         if self.low_main.numel() != self.num_static_param_main or self.high_main.numel() != self.num_static_param_main:
             raise ValueError(f"min/max main vectors must have length {self.num_static_param_main}; got {self.low_main.numel()}/{self.high_main.numel()}")
-        if (len(self.faulty_spike_generators) > 0) and (self.low_faulty.numel() != self.num_static_param_faulty or self.high_faulty.numel() != self.num_static_param_faulty):
+        if ((len(self.faulty_spike_generators) > 0 or len(self.faulty_static_values) > 0) and 
+            (self.low_faulty.numel() != self.num_static_param_faulty or self.high_faulty.numel() != self.num_static_param_faulty)):
             raise ValueError(f"min/max faulty vectors must have length {self.num_static_param_faulty}; got {self.low_faulty.numel()}/{self.high_faulty.numel()}")
 
     @property
@@ -494,19 +514,11 @@ class pSpikeGenerator(nn.Module):
         x_main = torch.cat([x, expanded_main], dim=1)
         out_main = self.spike_generator(x_main)
 
-        # If no faulty surrogates exist, always return main
-        if len(self.faulty_spike_generators) == 0:
+        # If no faulty surrogates or static faulty values exist, always return main
+        if len(self.faulty_spike_generators) == 0 and len(self.faulty_static_values) == 0:
             if out_main.dim() == 3 and out_main.shape[1] == 1:
                 return out_main.squeeze(1)
             return out_main
-
-        # Build FAULTY input as before
-        extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
-        if extra_faulty is None:
-            expanded_faulty = torch.empty(batch_size, 0, T, device=device)
-        else:
-            expanded_faulty = extra_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
-        x_faulty = torch.cat([x, expanded_faulty], dim=1)
 
         # If force_fault is None -> default to no-fault behavior (we rely on SGLayer to explicitly request faults)
         if force_fault is None:
@@ -521,12 +533,39 @@ class pSpikeGenerator(nn.Module):
                 return out_main.squeeze(1)
             return out_main
 
-        # If force_fault is True -> use a randomly selected faulty surrogate for this forward
-        idx = torch.randint(len(self.faulty_spike_generators), (1,), device=device).item()
-        faulty_gen = self.faulty_spike_generators[idx]
-        out_faulty = faulty_gen(x_faulty)
+        # If force_fault is True -> use a randomly selected faulty neuron (either dynamic or static)
+        total_faulty = len(self.faulty_spike_generators) + len(self.faulty_static_values)
+        idx = torch.randint(total_faulty, (1,), device=device).item()
+        
+        if idx < len(self.faulty_spike_generators):
+            # Dynamic faulty neuron: use a loaded checkpoint
+            faulty_gen = self.faulty_spike_generators[idx]
+            
+            # Build FAULTY input for dynamic faulty neuron
+            extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
+            if extra_faulty is None:
+                expanded_faulty = torch.empty(batch_size, 0, T, device=device)
+            else:
+                expanded_faulty = extra_faulty.expand(batch_size, -1).unsqueeze(2).expand(-1, -1, T)
+            x_faulty = torch.cat([x, expanded_faulty], dim=1)
+            out_faulty = faulty_gen(x_faulty)
+        else:
+            # Static faulty neuron: output constant value
+            static_idx = idx - len(self.faulty_spike_generators)
+            static_value = self.faulty_static_values_tensor[static_idx]
+            
+            # Create constant output with same shape as out_main
+            if out_main.dim() == 3:
+                # out_main shape: (B, C, T) -> create (B, C, T) with constant value
+                out_faulty = torch.full_like(out_main, static_value)
+            else:
+                # out_main shape: (B, T) -> create (B, T) with constant value
+                out_faulty = torch.full((batch_size, T), static_value, device=device)
+                if out_main.dim() == 2 and out_main.shape[1] == 1:
+                    # If out_main is (B, 1, T) squeezed to (B, T), we need to unsqueeze for consistency
+                    out_faulty = out_faulty.unsqueeze(1)
 
-        # Normalize outputs to (B,1,T)
+        # Normalize outputs to (B,1,T) for consistent mixing
         def normalize_out(o, which):
             if o.dim() == 2:          # (B, T) -> (B, 1, T)
                 return o.unsqueeze(1)
@@ -555,6 +594,17 @@ class pSpikeGenerator(nn.Module):
         self.args = args
         # refresh fault probability from args (if changed)
         self.fault_prob = float(getattr(args, "fault_prob", self.fault_prob))
+        # refresh static faulty values if changed in args
+        if hasattr(args, "faulty_static_values"):
+            self.faulty_static_values = args.faulty_static_values or []
+            if self.faulty_static_values:
+                self.faulty_static_values_tensor = torch.tensor(
+                    self.faulty_static_values, 
+                    device=self.DEVICE, 
+                    dtype=torch.float32
+                )
+            else:
+                self.faulty_static_values_tensor = torch.tensor([], device=self.DEVICE, dtype=torch.float32)
 
 
 
@@ -575,6 +625,7 @@ class SGLayer(torch.nn.Module):
                  min_value_static_params,
                  max_value_static_params,
                  faulty_ckpt_paths: Optional[List[str]] = None,
+                 faulty_static_values: Optional[List[float]] = None,  # NEW: static faulty values
                  fault_prob: float = 0.0):
         super().__init__()
         self.args = args
@@ -590,6 +641,7 @@ class SGLayer(torch.nn.Module):
                  min_value_static_params,
                  max_value_static_params,
                  faulty_ckpt_paths=faulty_ckpt_paths,
+                 faulty_static_values=faulty_static_values,  # NEW: pass static values
                  fault_prob=fault_prob
              ) for _ in range(N)]
         )
@@ -644,13 +696,17 @@ class Inv(torch.nn.Module):
 class pLayer(torch.nn.Module):
     def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path, surrogate_gradient,
                  train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
-                 faulty_ckpt_paths: Optional[List[str]] = None, fault_prob: float = 0.0):
+                 faulty_ckpt_paths: Optional[List[str]] = None, 
+                 faulty_static_values: Optional[List[float]] = None,  # NEW: static faulty values
+                 fault_prob: float = 0.0):
         super().__init__()
         self.args = args
         self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient,
                           train_dataset, valid_dataset, num_static_param,
                           min_value_static_params, max_value_static_params,
-                          faulty_ckpt_paths=faulty_ckpt_paths, fault_prob=fault_prob)
+                          faulty_ckpt_paths=faulty_ckpt_paths, 
+                          faulty_static_values=faulty_static_values,  # NEW: pass static values
+                          fault_prob=fault_prob)
         self.INV = INV
 
         theta = torch.rand([n_in + 2, n_out])/10. + args.gmin
@@ -771,7 +827,9 @@ class pLayer(torch.nn.Module):
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
     def __init__(self, topology, args, model_class, ckpt_path, surrogate_gradient,
                  train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
-                 faulty_ckpt_paths: Optional[List[str]] = None, fault_prob: float = 0.0):
+                 faulty_ckpt_paths: Optional[List[str]] = None, 
+                 faulty_static_values: Optional[List[float]] = None,  # NEW: static faulty values
+                 fault_prob: float = 0.0):
         super().__init__()
         self.args = args
         self.INV = Inv(args)
@@ -785,6 +843,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
             # If it's the output layer, force probability to 0 and remove faulty paths
             current_fault_prob = 0.0 if is_output_layer else fault_prob
             current_faulty_ckpts = [] if is_output_layer else faulty_ckpt_paths
+            current_faulty_static_values = [] if is_output_layer else faulty_static_values  # NEW: no static faults in output layer
 
             self.model.add_module(
                 str(i) + '_pLayer',
@@ -802,6 +861,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                     min_value_static_params,
                     max_value_static_params,
                     faulty_ckpt_paths=current_faulty_ckpts, # Pass empty list for output
+                    faulty_static_values=current_faulty_static_values,  # NEW: pass empty for output
                     fault_prob=current_fault_prob          # Pass 0.0 for output
                 )
             )
