@@ -42,8 +42,10 @@ python -u train_full_network.py \
   --surrogate-class baseline-gpt \
   --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano-gpt-nano-epoch=192-val_loss=0.42.ckpt \
   --faulty-surrogates surrogate/models/BaselineGPT/GPT_Femto_wFaults-gpt-femto-epoch=39-val_loss=0.00.ckpt \
-  --mc-samples 5 \
+  --mc-samples 10 \
   --faulty-static-values "0.0,2.0,3.0" \
   --eval-mc-samples 5 \
   --warmup-epochs 0 \
-  --test-fault-modes none,single
+  --test-fault-modes none,single \ 
+  --batch-size 64 \
+  --spawn-sequential

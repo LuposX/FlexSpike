@@ -287,7 +287,7 @@ class CustomDataset(Dataset):
     #         return self.N_test * self.args.R_test
 
 
-def GetDataLoader(args, mode, path=None):
+def GetDataLoader(args, mode, path=None, batch_size=None):
     normal_datasets = ['Dataset_acuteinflammation.ds',  # 0
                        'Dataset_balancescale.ds',  # 1
                        'Dataset_breastcancerwisc.ds',  # 2
@@ -363,6 +363,9 @@ def GetDataLoader(args, mode, path=None):
         f.startswith('Dataset') and f.endswith('.ds'))]
     datasets.sort()
 
+    def _get_batch_size(ds, default_batch_size):
+        return default_batch_size if default_batch_size is not None else len(ds)
+
     if args.task == 'normal':
         dataname = normal_datasets[args.DATASET]
         # data
@@ -374,10 +377,10 @@ def GetDataLoader(args, mode, path=None):
                                 mode='test', augment=False)
 
         # batch
-        train_loader = DataLoader(trainset, batch_size=len(trainset))
-        valid_loader = DataLoader(validset, batch_size=len(validset))
-        test_loader = DataLoader(testset,  batch_size=len(testset))
-
+        train_loader = DataLoader(trainset, batch_size=_get_batch_size(trainset, batch_size))
+        valid_loader = DataLoader(validset, batch_size=_get_batch_size(validset, batch_size))
+        test_loader = DataLoader(testset,  batch_size=_get_batch_size(testset, batch_size))
+        
         # message
         info = {}
         info['dataname'] = trainset.data_name
@@ -409,10 +412,11 @@ def GetDataLoader(args, mode, path=None):
                 dataname, args, path, mode='test', augment=False)
             # batch
             train_loaders.append(DataLoader(
-                trainset, batch_size=len(trainset)))
+                trainset,  batch_size=_get_batch_size(trainset, batch_size)))
             valid_loaders.append(DataLoader(
-                validset, batch_size=len(validset)))
-            test_loaders.append(DataLoader(testset,  batch_size=len(testset)))
+                validset,  batch_size=_get_batch_size(validset, batch_size)))
+            test_loaders.append(DataLoader(
+                testset, batch_size=_get_batch_size(testset, batch_size)))
             # message
             info = {}
             info['dataname'] = trainset.data_name
@@ -441,9 +445,9 @@ def GetDataLoader(args, mode, path=None):
                                 mode='test', temporal=True, augment=False)
 
         # batch
-        train_loader = DataLoader(trainset, batch_size=len(trainset))
-        valid_loader = DataLoader(validset, batch_size=len(validset))
-        test_loader = DataLoader(testset,  batch_size=len(testset))
+        train_loader = DataLoader(trainset, batch_size=_get_batch_size(trainset, batch_size))
+        valid_loader = DataLoader(validset, batch_size=_get_batch_size(validset, batch_size))
+        test_loader = DataLoader(testset,  batch_size=_get_batch_size(testset, batch_size))
 
         # message
         info = {}
@@ -484,9 +488,9 @@ def GetDataLoader(args, mode, path=None):
         info['N_time'] = validset.N_time
 
         # batch
-        train_loader = DataLoader(trainset, batch_size=len(trainset))
-        valid_loader = DataLoader(validset, batch_size=len(validset))
-        test_loader = DataLoader(testset,  batch_size=len(testset))
+        train_loader = DataLoader(trainset, batch_size=_get_batch_size(trainset, batch_size))
+        valid_loader = DataLoader(validset, batch_size=_get_batch_size(validset, batch_size))
+        test_loader = DataLoader(testset,  batch_size=_get_batch_size(testset, batch_size))
 
         # message
         info['N_train'] = len(trainset)
