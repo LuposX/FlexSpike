@@ -44,3 +44,6 @@ python -u 2_train_gpt_baseline_surrogate.py  \
     --data data/dataset_v4.ds \
     --num-static-params 4 \
     --logging-directory /scratch/$USER/wandb_logs
+
+# Alternative data location
+# data/data_fault/
