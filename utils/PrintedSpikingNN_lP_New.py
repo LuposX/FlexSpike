@@ -183,26 +183,10 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         return {"val_loss": loss}
 
     def test_step(self, batch, batch_idx):
-        # Temporarily disable faults for the main test metrics (use fault_mode='none')
-        orig_mode = getattr(self.args, "fault_mode", "none")
-        setattr(self.args, "fault_mode", "none")
-        if hasattr(self.network, "UpdateArgs"):
-            self.network.UpdateArgs(self.args)
-
-        x, y = batch
-        loss = self.loss_fn(self.network, x, y)
-        test_acc, test_power = self.evaluator(self.network, x, y)
-
-        # Restore original mode
-        setattr(self.args, "fault_mode", orig_mode)
-        if hasattr(self.network, "UpdateArgs"):
-            self.network.UpdateArgs(self.args)
-
-        self.log("test_loss_fault_0.0", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_acc_fault_0.0", test_acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_power_fault_0.0", test_power, on_step=False, on_epoch=True, prog_bar=False)
-        return {"test_loss_fault_0.0": loss}
-        
+        """
+        Testing is done manual in on_test_epoch_end, thus code in here is not required.
+        """
+        return None        
 
     def on_test_epoch_end(self):
         """
