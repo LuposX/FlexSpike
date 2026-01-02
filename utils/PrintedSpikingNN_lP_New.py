@@ -54,12 +54,13 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  loss_fn=None,
                  train_dataset=None,
                  valid_dataset=None,
-                 faulty_ckpt_paths: Optional[List[str]] = None,  # list of faulty surrogate ckpts
+                 faulty_ckpt_paths: Optional[List[str]] = None,       # list of faulty surrogate ckpts
                  faulty_static_values: Optional[List[float]] = None,  # NEW: list of constant output values for static faulty neurons
                  # new args
-                 mc_samples: int = 1,                              # K: MC draws per minibatch
-                 use_interpolation: bool = False,                  # allow disabling interpolation
-                 warmup_epochs: int = 20):                         # keep warmup (no faults)
+                 mc_samples: int = 1,                                 # K: MC draws per minibatch
+                 use_interpolation: bool = False,                     # allow disabling interpolation
+                 warmup_epochs: int = 20,                             # keep warmup (no faults)
+                 enable_faults_during_training: bool = False):        # opt-in flag to allow faults during training
         super().__init__()
 
         if ckpt_path is None or ckpt_path == "" or not isinstance(ckpt_path, str):
@@ -80,6 +81,11 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         # Store MC + interpolation settings on args so downstream modules read them
         setattr(args, "mc_samples", int(mc_samples))
         setattr(args, "use_interpolation", bool(use_interpolation))
+
+        # expose the enable flag both on the module and on args for visibility downstream
+        self.enable_faults_during_training = bool(enable_faults_during_training)
+        setattr(args, "enable_faults_during_training", self.enable_faults_during_training)
+
         # initialize fault mode: start with no faults (warmup)
         setattr(args, "fault_mode", "none")
         # keep warmup_epochs on the module (user-specified or fallback)
@@ -87,7 +93,6 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         # keep older fault-related fields for backward compatibility but we won't use them
         setattr(args, "faulty_ckpt_paths", faulty_ckpt_paths if faulty_ckpt_paths is not None else [])
-
         setattr(args, "faulty_static_values", faulty_static_values if faulty_static_values is not None else [])
 
         self.args = args
@@ -126,11 +131,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
     def configure_optimizers(self):
         lr = getattr(self.args, "LR", getattr(self.args, "lr", 1e-3))
         params = self.network.GetParam()
-        #print(">>> optimizer param count:", sum(p.numel() for p in params))
-        #for p in params:
-        #    print("  p.requires_grad", p.requires_grad, "shape", p.shape)
         optimizer = torch.optim.AdamW(params, lr=lr)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args.EPOCH)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
@@ -138,6 +139,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                 patience=getattr(self.args, "LR_PATIENCE", 5),
                 min_lr=getattr(self.args, "LR_MIN", 1e-8))
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
+
 
 
     def training_step(self, batch, batch_idx):
@@ -156,13 +158,19 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
     def on_train_epoch_start(self):
         """After warmup epochs, enable single-fault injection (exactly one faulty neuron per forward).
-           During warmup we keep fault_mode='none' (no faults)."""
+           If enable_faults_during_training is False, we keep fault_mode='none' for all epochs.
+           During warmup (if enabled), we keep fault_mode='none' for the configured warmup_epochs."""
         epoch = self.current_epoch
 
-        if epoch < self.warmup_epochs:
+        if not self.enable_faults_during_training:
+            # explicit override: do not enable faults during training at all
             current_mode = "none"
         else:
-            current_mode = "single"
+            # original warmup behavior
+            if epoch < self.warmup_epochs:
+                current_mode = "none"
+            else:
+                current_mode = "single"
 
         setattr(self.args, "fault_mode", current_mode)
 
@@ -182,7 +190,8 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         mode_flag = 0 if current_mode == "none" else 1
         self.log("fault_mode_single_flag", mode_flag, on_epoch=True, prog_bar=True)
         self.log("mc_samples", int(getattr(self.args, "mc_samples", 1)), on_epoch=True, prog_bar=False)
-
+        # also log whether training faults are enabled (helpful for experiments)
+        self.log("training_faults_enabled", float(self.enable_faults_during_training), on_epoch=True, prog_bar=False)
 
     def on_train_epoch_end(self):
         opt = self.optimizers()
@@ -420,11 +429,13 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
 
-    
     def UpdateArgs(self, args):
-        """Keep compatibility with the original code."""
+        """Keep compatibility with the original code and pick up changes to the new enable flag."""
         self.args = args
-        self.network.UpdateArgs(args)
+        # refresh enable flag from args if present (allows runtime changes via args)
+        self.enable_faults_during_training = bool(getattr(args, "enable_faults_during_training", self.enable_faults_during_training))
+        if hasattr(self.network, "UpdateArgs"):
+            self.network.UpdateArgs(args)
 
     def on_save_checkpoint(self, checkpoint: dict) -> None:
         checkpoint["custom_args"] = vars(self.args) if hasattr(self.args, "__dict__") else {}
@@ -875,20 +886,60 @@ class pLayer(torch.nn.Module):
     def W(self):
         return self.theta.abs() / torch.sum(self.theta.abs(), axis=0, keepdim=True)
 
-    def MAC(self, a):
-        # 0 and positive thetas are corresponding to no negative weight circuit
-        positive = self.theta.clone().to(self.device)
-        positive[positive >= 0] = 1.
-        positive[positive < 0] = 0.
-        negative = 1. - positive
+    def MAC(self, a, conn_fault: Optional[Tuple[int, int, str]] = None):
+        """
+        a: (B, n_in)
+        conn_fault: None or tuple (in_idx, out_idx, mode) where mode is 'stuck_off' or 'stuck_on'
+        """
+        # base theta that preserves gradients to self.theta_
+        theta_base = self.theta  # this retains gradient path to self.theta_
+
+        # create a modified copy that will be used for forward, then stitch into gradient path
+        theta_mod = theta_base.clone()
+
+        # apply connection fault if requested (only to the copy)
+        if conn_fault is not None:
+            in_idx, out_idx, mode = conn_fault
+            # sanity clamps (do nothing if indexes out of bounds)
+            if 0 <= in_idx < theta_mod.shape[0] - 2 and 0 <= out_idx < theta_mod.shape[1]:
+                if mode == "stuck_off":
+                    theta_mod[in_idx, out_idx] = 0.0
+                elif mode == "stuck_on":
+                    # preserve sign, set magnitude to gmax
+                    gmax = float(getattr(self.args, "gmax", 1.0))
+                    s = torch.sign(theta_mod[in_idx, out_idx]) if theta_mod[in_idx, out_idx] != 0 else 1.0
+                    theta_mod[in_idx, out_idx] = s * gmax
+                else:
+                    # unknown mode -> no-op
+                    pass
+
+        # Use gradient-safe replacement: forward uses theta_mod, backward accumulates to theta_base
+        theta_used = theta_base + (theta_mod - theta_base).detach()
+
+        # Now compute positive/negative masks and W from theta_used (not from self.theta)
+        positive_mask = theta_used.clone()
+        positive_mask[positive_mask >= 0] = 1.0
+        positive_mask[positive_mask < 0] = 0.0
+        negative_mask = 1.0 - positive_mask
+
+        # column-normalized absolute conductances (from faulty-used theta)
+        abs_theta = theta_used.abs()
+        denom = torch.sum(abs_theta, axis=0, keepdim=True)
+        # avoid division by zero (if entire column zero -> keep zeros)
+        denom = denom + (denom == 0.).float() * 1e-12
+        W_eff = abs_theta / denom  # shape (n_in+2, n_out)
+
+        # extend inputs with bias and dummy
         a_extend = torch.cat([a,
                               torch.ones([a.shape[0], 1]).to(self.device),
                               torch.zeros([a.shape[0], 1]).to(self.device)], dim=1)
         a_neg = self.INV(a_extend)
         a_neg[:, -1] = 0.
-        z = torch.matmul(a_extend, self.W * positive) + \
-            torch.matmul(a_neg, self.W * negative)
+
+        z = torch.matmul(a_extend, W_eff * positive_mask) + \
+            torch.matmul(a_neg, W_eff * negative_mask)
         return z
+
 
     @property
     def neg_power(self):
@@ -917,16 +968,36 @@ class pLayer(torch.nn.Module):
         T = x.shape[2]
         result = []
         self.power = torch.tensor(0.).to(self.device)
+        # ensure last_fault_info is cleared at start
+        self.last_fault_info = None
+
+        # If a connection fault was preassigned on this layer, expose it in last_fault_info (for logging)
+        if hasattr(self, "conn_fault") and self.conn_fault is not None:
+            in_idx, out_idx, mode = self.conn_fault
+            self.last_fault_info = {
+                "fault_type": "connection",
+                "in_idx": int(in_idx),
+                "out_idx": int(out_idx),
+                "conn_fault_mode": mode,
+                "layer": self.layer_idx
+            }
+
         for t in range(T):
-            mac = self.MAC(x[:, :, t])
+            mac = self.MAC(x[:, :, t], conn_fault=getattr(self, "conn_fault", None))
             result.append(mac)
             self.power += self.MACPower(x[:, :, t], mac)
         z_new = torch.stack(result, dim=2)
         self.power = self.power / T
         a_new = self.SG(z_new, global_fault=global_fault)
-        # propagate last_fault_info from SGLayer to pLayer
-        self.last_fault_info = getattr(self.SG, "last_fault_info", None)
+        # If SG reported a neuron-level fault, keep that (it overrides connection info)
+        sg_fault = getattr(self.SG, "last_fault_info", None)
+        if sg_fault:
+            self.last_fault_info = {
+                "layer": self.layer_idx,
+                **sg_fault
+            }
         return a_new
+
 
     @property
     def g_tilde(self):
@@ -1013,47 +1084,87 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
         return self.args.DEVICE
 
     def forward(self, x):
-        # Implement sequential forward that selects a single faulty neuron in 'single' mode
+        # Implement sequential forward that selects a single faulty neuron or a single faulty connection
         fault_mode = getattr(self.args, "fault_mode", "none")
-        selected_pair = None  # (layer_idx, sg_idx) or None
+
+        # No fault sampling if mode == 'none'
+        selected_pair = None  # (layer_idx, sg_idx) if neuron fault
+        selected_conn = None  # (layer_idx, in_idx, out_idx, conn_mode) if connection fault
 
         if fault_mode == "single":
-            # build list of (layer_idx, sg_count) for layers that actually have SGs
-            valid_layers = []
+            # Build candidates: neurons and connections
+            candidates = []  # list of tuples: ('neuron', layer, sg) or ('conn', layer, in_idx, out_idx)
             for i, layer in enumerate(self.model):
+                # neuron candidates (only if layer has SGs)
                 sg = getattr(layer, "SG", None)
                 if sg is not None:
                     N = getattr(sg, "N", len(getattr(sg, "SG_Group", [])))
-                    if N > 0:
-                        valid_layers.append((i, N))
-            if len(valid_layers) > 0:
-                # choose uniformly among valid layers, then uniformly among SGs in that layer
-                # choose layer
-                layer_choices = [vl[0] for vl in valid_layers]
-                layer_choice_idx = torch.randint(len(layer_choices), (1,), device=self.DEVICE).item()
-                sel_layer = int(layer_choices[layer_choice_idx])
-                # find its N
-                sel_N = None
-                for (li, N) in valid_layers:
-                    if li == sel_layer:
-                        sel_N = N
-                        break
-                sel_sg = torch.randint(sel_N, (1,), device=self.DEVICE).item()
-                selected_pair = (sel_layer, int(sel_sg))
+                    for sg_idx in range(N):
+                        candidates.append(("neuron", i, int(sg_idx)))
+
+                # connection candidates based on theta shape (exclude bias + dummy rows)
+                # theta_ has shape (n_in + 2, n_out)
+                if hasattr(layer, "theta_"):
+                    theta_shape = tuple(layer.theta_.shape)
+                    n_rows, n_cols = theta_shape[0], theta_shape[1]
+                    n_in = n_rows - 2  # exclude last two rows (bias, dummy)
+                    for in_idx in range(n_in):
+                        for out_idx in range(n_cols):
+                            candidates.append(("conn", i, int(in_idx), int(out_idx)))
+
+            if len(candidates) > 0:
+                # uniform sample one candidate
+                sel_idx = int(torch.randint(len(candidates), (1,), device=self.DEVICE).item())
+                sel = candidates[sel_idx]
+                if sel[0] == "neuron":
+                    _, sel_layer, sel_sg = sel
+                    selected_pair = (int(sel_layer), int(sel_sg))
+                else:
+                    # connection chosen
+                    _, sel_layer, sel_in, sel_out = sel
+                    # choose conn fault mode uniformly: 'stuck_off' or 'stuck_on'
+                    conn_mode = "stuck_off" if torch.rand(1).item() < 0.5 else "stuck_on"
+                    selected_conn = (int(sel_layer), int(sel_in), int(sel_out), conn_mode)
+
         # now propagate through layers, supplying global_fault only when appropriate
         out = x
         self.last_fault_info = None
+
         for i, layer in enumerate(self.model):
-            # For pLayer we updated forward to accept global_fault keyword
-            if selected_pair is not None and selected_pair[0] == i:
-                out = layer(out, global_fault=selected_pair)
-            else:
+            # Clear any previous conn fault on layer
+            if hasattr(layer, "conn_fault"):
+                layer.conn_fault = None
+
+            # If a connection fault was selected for this layer, set it on the layer
+            if selected_conn is not None and selected_conn[0] == i:
+                _, in_idx, out_idx, mode = selected_conn
+                layer.conn_fault = (int(in_idx), int(out_idx), mode)
+                # record layer-level info (so pLayer can expose it)
+                layer.last_fault_info = {
+                    "fault_type": "connection",
+                    "in_idx": int(in_idx),
+                    "out_idx": int(out_idx),
+                    "conn_fault_mode": mode,
+                    "layer": i
+                }
+                # Do not pass global_fault to SG (this is a synapse fault)
                 out = layer(out, global_fault=None)
-            # if this layer recorded a last_fault_info, capture it to network-level
+                # clear layer.conn_fault after forward to avoid leaking
+                layer.conn_fault = None
+            else:
+                # If a neuron fault was selected and it's in this layer, pass it through
+                if selected_pair is not None and selected_pair[0] == i:
+                    out = layer(out, global_fault=selected_pair)
+                else:
+                    out = layer(out, global_fault=None)
+
+            # if this layer recorded a last_fault_info (SG or pLayer set), capture it to network-level
             layer_info = getattr(layer, "last_fault_info", None)
             if layer_info:
                 self.last_fault_info = layer_info
+
         return out
+
 
     @property
     def power(self):

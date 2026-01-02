@@ -31,6 +31,8 @@ echo "[$(date)] Environment variables exported."
 
 # Run with unbuffered output for real-time logging
 echo "[$(date)] Starting Python script..."
+
+# To train with fault use: --train-with-faults
 python -u train_full_network.py \
   --project flexible-printed-network \
   --experiment PSNN_wSurrGPT_wFaults \
@@ -40,12 +42,14 @@ python -u train_full_network.py \
   --lr-min 5e-5 \
   --hidden 5 5 \
   --surrogate-class baseline-gpt \
-  --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano-gpt-nano-epoch=192-val_loss=0.42.ckpt \
+  --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano_run1-gpt-nano-epoch=185-val_loss=0.36.ckpt \
   --faulty-surrogates surrogate/models/BaselineGPT/GPT_Femto_wFaults-gpt-femto-epoch=39-val_loss=0.00.ckpt \
   --mc-samples 10 \
   --faulty-static-values "0.0,2.0,3.0" \
   --eval-mc-samples 5 \
   --warmup-epochs 0 \
-  --test-fault-modes none,single \ 
+  --test-fault-modes none,single \
   --batch-size 64 \
-  --spawn-sequential
+  --num-runs 6 \
+  --spawn-sequential \
+  --train-with-faults
