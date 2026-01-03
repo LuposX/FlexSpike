@@ -37,6 +37,7 @@
               scipy
               scikit-learn
 	      plotly
+              pyarrow
 
               # Self built
               snntorch

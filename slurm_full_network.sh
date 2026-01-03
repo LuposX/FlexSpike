@@ -42,9 +42,9 @@ python -u train_full_network.py \
   --lr-min 5e-5 \
   --hidden 5 5 \
   --surrogate-class baseline-gpt \
-  --surrogate-ckpt surrogate/models/BaselineGPT/GPT_Nano_run1-gpt-nano-epoch=185-val_loss=0.36.ckpt \
-  --faulty-surrogates surrogate/models/BaselineGPT/GPT_Femto_wFaults-gpt-femto-epoch=39-val_loss=0.00.ckpt \
-  --mc-samples 10 \
+  --surrogate-ckpt "surrogate/models/BaselineGPT/GPT_Nano_run1-gpt-nano-epoch=185-val_loss=0.36.ckpt" \
+  --faulty-surrogates "surrogate/models/BaselineGPT/GPT_Nano_wFaultM1-gpt-nano-epoch=82-val_loss=0.00.ckpt, surrogate/models/BaselineGPT/GPT_Nano_wFaultM2-gpt-nano-epoch=20-val_loss=0.00.ckpt, surrogate/models/BaselineGPT/GPT_Nano_wFaultC1-gpt-nano-epoch=55-val_loss=0.00.ckpt" \
+  --mc-samples 20 \
   --faulty-static-values "0.0,2.0,3.0" \
   --eval-mc-samples 5 \
   --warmup-epochs 0 \
