@@ -1,0 +1,26 @@
+{
+  "os":  "Linux-6.12.61-x86_64-with-glibc2.40",
+  "python":  "CPython 3.12.11",
+  "startedAt":  "2025-12-17T13:47:47.609569Z",
+  "program":  "<python with no main file>",
+  "git":  {
+    "remote":  "git@github-personal.com:LuposX/SpikeSynth.git",
+    "commit":  "b93701cb11a9f4ba2221291d9eae716b9dca27ec"
+  },
+  "email":  "schuppsimon5@gmail.com",
+  "root":  "/home/monkeman/SpikeSynth/surrogate/models/BaselineGPT",
+  "host":  "logos",
+  "executable":  "/nix/store/c9nrmki4ipd3f81y51dhad50fdjmvvf3-python3-3.12.11-env/bin/python3.12",
+  "cpu_count":  20,
+  "cpu_count_logical":  20,
+  "disk":  {
+    "/":  {
+      "total":  "539426451456",
+      "used":  "225620361216"
+    }
+  },
+  "memory":  {
+    "total":  "33064202240"
+  },
+  "writerId":  "a4ofxlo5rtfykhf1muev2bm4xr65n5r7"
+}

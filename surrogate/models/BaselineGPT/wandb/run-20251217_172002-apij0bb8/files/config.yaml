@@ -1,0 +1,32 @@
+_wandb:
+    value:
+        cli_version: 0.21.4
+        e:
+            grv6k5zqtiocn03mntq99vaa4dttxoht:
+                cpu_count: 20
+                cpu_count_logical: 20
+                disk:
+                    /:
+                        total: "539426451456"
+                        used: "225894576128"
+                email: schuppsimon5@gmail.com
+                executable: /nix/store/c9nrmki4ipd3f81y51dhad50fdjmvvf3-python3-3.12.11-env/bin/python3.12
+                git:
+                    commit: 55d1cb27973b50fd28e18c048887014fea57a24c
+                    remote: git@github-personal.com:LuposX/SpikeSynth.git
+                host: logos
+                memory:
+                    total: "33064202240"
+                os: Linux-6.12.61-x86_64-with-glibc2.40
+                program: <python with no main file>
+                python: CPython 3.12.11
+                root: /home/monkeman/SpikeSynth/surrogate/models/BaselineGPT
+                startedAt: "2025-12-17T16:20:02.192774Z"
+                writerId: grv6k5zqtiocn03mntq99vaa4dttxoht
+        m: []
+        python_version: 3.12.11
+        t:
+            "4": 3.12.11
+            "5": 0.21.4
+            "12": 0.21.4
+            "13": linux-x86_64
