@@ -73,6 +73,7 @@ If your cluster uses **SLURM**, the `surrogate` folder provides SLURM scripts:
 
 #### Workflow
 
+0. Check with `sinfo_t_idle` what resources are available for immediate use.
 1. Edit the script to adjust task parameters.
 2. Submit the job:
 
