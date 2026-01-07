@@ -1,12 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=FullNetwork
-#SBATCH --partition=cpu
+#SBATCH --partition=cpu_il
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
-#SBATCH --time=30:00:00
+#SBATCH --time=50:00:00
 #SBATCH --output=logs_slurm/full_network_%j.out
 #SBATCH --error=logs_slurm/full_network_%j.err
+#SBATCH --mem=60000mb
 
 echo "[$(date)] SLURM job starting..."    # timestamped start message
 echo "Job ID: $SLURM_JOB_ID, Node: $SLURM_NODELIST"
@@ -37,16 +38,16 @@ python -u train_full_network.py \
   --project flexible-printed-network \
   --experiment PSNN_wSurrGPT_wFaults \
   --timelimit 10 \
-  --epochs 200 \
-  --lr 0.1 \
+  --epochs 300 \
+  --lr 0.05 \
   --lr-min 5e-5 \
   --hidden 5 5 \
   --surrogate-class baseline-gpt \
   --surrogate-ckpt "surrogate/models/BaselineGPT/GPT_Nano_run1-gpt-nano-epoch=185-val_loss=0.36.ckpt" \
   --faulty-surrogates "surrogate/models/BaselineGPT/GPT_Femto_wFaultC1-gpt-femto-epoch=75-val_loss=0.00.ckpt,surrogate/models/BaselineGPT/GPT_Femto_wFaultM2-gpt-femto-epoch=88-val_loss=0.00.ckpt,surrogate/models/BaselineGPT/GPT_Femto_wFaultM1-gpt-femto-epoch=95-val_loss=0.00.ckpt" \
-  --mc-samples 20 \
+  --mc-samples 10 \
   --faulty-static-values "0.0,2.0,3.0" \
-  --eval-mc-samples 5 \
+  --eval-mc-samples 20 \
   --warmup-epochs 0 \
   --test-fault-modes none,single \
   --batch-size 64 \
