@@ -164,16 +164,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=None, help="Default batch size for train/valid/test (overridden by mode-specific flags).")
 
     # new MC + fault args
-    p.add_argument("--mc-samples", type=int, default=4)
-    p.add_argument("--eval-mc-samples", type=int, default=None)
+    p.add_argument("--mc-samples", type=int, default=4, help="The number of monte carlo samples we want to use per trainigns instance.")
+    p.add_argument("--eval-mc-samples", type=int, default=None, help="The number of monte carlo samples we want to use during evaluation.")
     p.add_argument("--use-interpolation", action="store_true")
-    p.add_argument("--warmup-epochs", type=int, default=0)
-    p.add_argument("--test-fault-modes", type=str, default="none,single")
+    p.add_argument("--warmup-epochs", type=int, default=0, help="Alls epochs before warmup-epochs will not have any faults injected.")
+    p.add_argument("--test-fault-modes", type=str, default="none,single", help="During testing whether we will inject no faults 'none' a single fault 'single' or both 'none,single'.")
+    p.add_argument("--static-param-perturb", type=float, default=0.05, help="How much perturbation of the static params we want in variance.")
 
     # static params
-    p.add_argument("--num-static-param", type=str, default="4,0")
-    p.add_argument("--min-static-main", type=str, default=torch.tensor([0.0, 0.1, 0.15, 0.5]))
-    p.add_argument("--max-static-main", type=str, default=torch.tensor([1.0, 1.0, 1.0, 1.0]))
+    p.add_argument("--num-static-param", type=str, default="4,0", help="The number of static paramater depends on the dataset with which the surrogate was trained and describes the emulated circuit.")
+    p.add_argument("--min-static-main", type=str, default=torch.tensor([0.0, 0.1, 0.15, 0.5]), help="The minimum value the static paramaters are allowed to have.")
+    p.add_argument("--max-static-main", type=str, default=torch.tensor([1.0, 1.0, 1.0, 1.0]), help="The maximum value the static paramaters are allowed to have.")
     p.add_argument("--min-static-faulty", type=str, default=None)
     p.add_argument("--max-static-faulty", type=str, default=None)
 
@@ -182,15 +183,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lr-min", type=float, default=1e-6)
 
     # model topology
-    p.add_argument("--hidden", type=int, nargs="*", default=None)
-    p.add_argument("--surrogate-class", type=str, choices=["baseline-gpt", "spiking", "non-spiking"], default="spiking")
+    p.add_argument("--hidden", type=int, nargs="*", default=None, help="The number of neurons per layer the mdoel should have.")
+    p.add_argument("--surrogate-class", type=str, choices=["baseline-gpt", "spiking", "non-spiking"], default="spiking", help="The type i..e the architecture the surrogate has.")
 
     # logging / checkpoint
-    p.add_argument("--experiment", type=str, default="test")
-    p.add_argument("--project", type=str, default="Spike-Synth-Full")
+    p.add_argument("--experiment", type=str, default="test", help="The name the experiment should have important for wandb integration.")
+    p.add_argument("--project", type=str, default="Spike-Synth-Full", help="The name the project should have important for wandb integration.")
     p.add_argument("--log-dir", type=str, default=".temp")
     p.add_argument("--checkpoint-dir", type=str, default=None)
-    p.add_argument("--surrogate-ckpt", type=str, default="surrogate/models/Spiking/LeakyParallel/RSNN_wLMSE-runrun_idx=0-epoch=78-val_loss=0.07.ckpt.ckpt")
+    p.add_argument("--surrogate-ckpt", type=str, default="surrogate/models/Spiking/LeakyParallel/RSNN_wLMSE-runrun_idx=0-epoch=78-val_loss=0.07.ckpt.ckpt", help="The location to the checkpoint of the healthy surrogate we want to use in the model.")
 
     # runtime flags
     p.add_argument("--progressive", action="store_true")
@@ -536,6 +537,7 @@ def run_train(args_cli: argparse.Namespace):
                     use_interpolation=args_cli.use_interpolation,
                     warmup_epochs=args_cli.warmup_epochs,
                     enable_faults_during_training=args_cli.train_with_faults,
+                    static_param_perturb=args_cli.static_param_perturb
                 )
                 logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s run=%d)",
                             surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None), run_idx)

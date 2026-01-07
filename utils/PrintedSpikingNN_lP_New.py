@@ -60,6 +60,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  mc_samples: int = 1,                                 # K: MC draws per minibatch
                  use_interpolation: bool = False,                     # allow disabling interpolation
                  warmup_epochs: int = 20,                             # keep warmup (no faults)
+                 static_param_perturb: float = 0.05,
                  enable_faults_during_training: bool = False):        # opt-in flag to allow faults during training
         super().__init__()
 
@@ -101,7 +102,8 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             surrogate_gradient, train_dataset, valid_dataset,
             num_static_param, min_value_static_params, max_value_static_params,
             faulty_ckpt_paths=faulty_ckpt_paths, 
-            faulty_static_values=faulty_static_values,  # NEW: Pass static values
+            faulty_static_values=faulty_static_values,
+            static_param_perturb=static_param_perturb
         )
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
@@ -465,8 +467,9 @@ class pSpikeGenerator(nn.Module):
                  valid_dataset,
                  min_value_static_params,
                  max_value_static_params,
+                 static_param_perturb: float,
                  faulty_ckpt_paths: Optional[List[str]] = None,
-                 faulty_static_values: Optional[List[float]] = None,  # NEW
+                 faulty_static_values: Optional[List[float]] = None,
                  ):
         super().__init__()
         self.args = args
@@ -521,7 +524,6 @@ class pSpikeGenerator(nn.Module):
                 param.requires_grad = False
             self.faulty_spike_generators.append(fgen)
 
-        # NEW: Store static faulty values
         self.faulty_static_values = faulty_static_values or getattr(args, "faulty_static_values", []) or []
         # keep a python list for logging and a tensor for vector ops
         self.faulty_static_values_list = list(self.faulty_static_values)
@@ -569,6 +571,13 @@ class pSpikeGenerator(nn.Module):
     def DEVICE(self):
         return torch.device(self.args.DEVICE) if isinstance(self.args.DEVICE, str) else self.args.DEVICE
 
+    def _perturb(self, x, strength: float):
+        if strength <= 0.0:
+            return x
+        # Uniform in [1 - s, 1 + s]
+        noise = 1.0 + strength * (2.0 * torch.rand_like(x) - 1.0)
+        return x * noise
+
     def _transform(self, raw_params, low, high):
         # raw_params shape: (1, num_static_param)
         if raw_params is None:
@@ -603,6 +612,9 @@ class pSpikeGenerator(nn.Module):
     
         # Build MAIN input as before
         extra_main = self._transform(self.raw_params_main, self.low_main, self.high_main)
+
+        perturb = float(getattr(self.args, "static_param_perturb", 0.0))
+        extra_main = self._perturb(extra_main, perturb)
         if extra_main is None:
             expanded_main = torch.empty(batch_size, 0, T, device=device)
         else:
@@ -750,9 +762,10 @@ class SGLayer(torch.nn.Module):
                  num_static_param,
                  min_value_static_params,
                  max_value_static_params,
+                 static_param_perturb: float,
                  faulty_ckpt_paths: Optional[List[str]] = None,
                  faulty_static_values: Optional[List[float]] = None,  # NEW
-                 layer_idx: Optional[int] = None):   # NEW: layer index
+                 layer_idx: Optional[int] = None):  
         super().__init__()
         self.args = args
         self.layer_idx = layer_idx
@@ -771,6 +784,7 @@ class SGLayer(torch.nn.Module):
                  max_value_static_params,
                  faulty_ckpt_paths=faulty_ckpt_paths,
                  faulty_static_values=faulty_static_values,
+                 static_param_perturb=static_param_perturb,
              ) for _ in range(N)]
         )
 
@@ -842,8 +856,9 @@ class Inv(torch.nn.Module):
 class pLayer(torch.nn.Module):
     def __init__(self, n_in, n_out, args, layer_idx, INV, model_class, ckpt_path, surrogate_gradient,
                  train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
+                 static_param_perturb: float,
                  faulty_ckpt_paths: Optional[List[str]] = None, 
-                 faulty_static_values: Optional[List[float]] = None,  # NEW
+                 faulty_static_values: Optional[List[float]] = None,  
                  ):
         super().__init__()
         self.args = args
@@ -852,7 +867,8 @@ class pLayer(torch.nn.Module):
                           train_dataset, valid_dataset, num_static_param,
                           min_value_static_params, max_value_static_params,
                           faulty_ckpt_paths=faulty_ckpt_paths, 
-                          faulty_static_values=faulty_static_values,  # NEW
+                          faulty_static_values=faulty_static_values, 
+                          static_param_perturb=static_param_perturb,
                           layer_idx=layer_idx
                           )
         self.INV = INV
@@ -1039,9 +1055,13 @@ class pLayer(torch.nn.Module):
 
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
     def __init__(self, topology, args, model_class, ckpt_path, surrogate_gradient,
-                 train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
+                 train_dataset, valid_dataset, 
+                 num_static_param: int, 
+                 min_value_static_params: List[float], 
+                 max_value_static_params: List[float],
+                 static_param_perturb : float,
                  faulty_ckpt_paths: Optional[List[str]] = None, 
-                 faulty_static_values: Optional[List[float]] = None,  # NEW: static faulty values
+                 faulty_static_values: Optional[List[float]] = None,
                  ):
         super().__init__()
         self.args = args
@@ -1075,6 +1095,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                         max_value_static_params=max_value_static_params,
                         faulty_ckpt_paths=current_faulty_ckpts,
                         faulty_static_values=current_faulty_static_values,
+                        static_param_perturb=static_param_perturb,
                     )
                 )
         self.last_fault_info = None

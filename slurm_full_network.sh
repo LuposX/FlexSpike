@@ -52,4 +52,5 @@ python -u train_full_network.py \
   --batch-size 64 \
   --num-runs 6 \
   --spawn-sequential \
+  --static-param-perturb 0.05 \
   --train-with-faults
