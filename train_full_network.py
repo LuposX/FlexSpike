@@ -172,7 +172,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--static-param-perturb", type=float, default=0.05, help="How much perturbation of the static params we want in variance.")
 
     # static params
-    p.add_argument("--num-static-param", type=str, default="4,0", help="The number of static paramater depends on the dataset with which the surrogate was trained and describes the emulated circuit.")
+    p.add_argument("--num-static-param", type=str, default="4,4", help="The number of static paramater depends on the dataset with which the surrogate was trained and describes the emulated circuit, should be two numebrs first nubmer for the healthy surrogate, second nubmer for the faulty surrogate.")
     p.add_argument("--min-static-main", type=str, default=torch.tensor([0.0, 0.1, 0.15, 0.5]), help="The minimum value the static paramaters are allowed to have.")
     p.add_argument("--max-static-main", type=str, default=torch.tensor([1.0, 1.0, 1.0, 1.0]), help="The maximum value the static paramaters are allowed to have.")
     p.add_argument("--min-static-faulty", type=str, default=None)
@@ -537,7 +537,8 @@ def run_train(args_cli: argparse.Namespace):
                     use_interpolation=args_cli.use_interpolation,
                     warmup_epochs=args_cli.warmup_epochs,
                     enable_faults_during_training=args_cli.train_with_faults,
-                    static_param_perturb=args_cli.static_param_perturb
+                    static_param_perturb=args_cli.static_param_perturb,
+                    logger=logger
                 )
                 logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s run=%d)",
                             surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None), run_idx)

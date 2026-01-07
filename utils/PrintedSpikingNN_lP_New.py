@@ -51,6 +51,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  # either a tensor for main/faulty shared, or a pair of tensor/list (main, faulty)
                  min_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
                  max_value_static_params: Union[torch.Tensor, Tuple[torch.Tensor]],
+                 logger,
                  loss_fn=None,
                  train_dataset=None,
                  valid_dataset=None,
@@ -98,12 +99,20 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         self.args = args
         self.network = PrintedSpikingNeuralNetwork(
-            topology, args, model_class, ckpt_path,
-            surrogate_gradient, train_dataset, valid_dataset,
-            num_static_param, min_value_static_params, max_value_static_params,
-            faulty_ckpt_paths=faulty_ckpt_paths, 
+            topology=topology,
+            args=args,
+            model_class=model_class,
+            ckpt_path=ckpt_path,
+            surrogate_gradient=surrogate_gradient,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+            logger=logger,
+            num_static_param=num_static_param,
+            min_value_static_params=min_value_static_params,
+            max_value_static_params=max_value_static_params,
+            static_param_perturb=static_param_perturb,
+            faulty_ckpt_paths=faulty_ckpt_paths,
             faulty_static_values=faulty_static_values,
-            static_param_perturb=static_param_perturb
         )
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
@@ -465,6 +474,7 @@ class pSpikeGenerator(nn.Module):
                  surrogate_gradient,
                  train_dataset,
                  valid_dataset,
+                 logger,
                  min_value_static_params,
                  max_value_static_params,
                  static_param_perturb: float,
@@ -473,6 +483,8 @@ class pSpikeGenerator(nn.Module):
                  ):
         super().__init__()
         self.args = args
+
+        self.logger2 = logger
 
         # Helper: allow either single-spec or pair-spec (main, faulty)
         def _split_pair(x, name):
@@ -682,6 +694,8 @@ class pSpikeGenerator(nn.Module):
                 "faulty_choice_idx": idx,
                 "ckpt_path": ckpt_path
             }
+
+            self.logger2.info("The choosen fault is %s", self.last_fault_info)
     
             # Build FAULTY input for dynamic faulty neuron
             extra_faulty = self._transform(self.raw_params_faulty, self.low_faulty, self.high_faulty)
@@ -710,6 +724,8 @@ class pSpikeGenerator(nn.Module):
                 "faulty_choice_idx": static_idx,
                 "static_value": static_value
             }
+
+            self.logger2.info("The choosen fault is %s", self.last_fault_info)
     
             # Create constant output with same shape as out_main
             if out_main.dim() == 3:
@@ -762,6 +778,7 @@ class SGLayer(torch.nn.Module):
                  num_static_param,
                  min_value_static_params,
                  max_value_static_params,
+                 logger,
                  static_param_perturb: float,
                  faulty_ckpt_paths: Optional[List[str]] = None,
                  faulty_static_values: Optional[List[float]] = None,  # NEW
@@ -773,19 +790,20 @@ class SGLayer(torch.nn.Module):
         self.N = N
         self.SG_Group = torch.nn.ModuleList(
             [pSpikeGenerator(
-                 args,
-                 model_class,
-                 ckpt_path,
-                 num_static_param,
-                 surrogate_gradient,
-                 train_dataset,
-                 valid_dataset,
-                 min_value_static_params,
-                 max_value_static_params,
-                 faulty_ckpt_paths=faulty_ckpt_paths,
-                 faulty_static_values=faulty_static_values,
-                 static_param_perturb=static_param_perturb,
-             ) for _ in range(N)]
+                args=args,
+                model_class=model_class,
+                ckpt_path=ckpt_path,
+                surrogate_gradient=surrogate_gradient,
+                logger=logger,
+                num_static_param=num_static_param,
+                train_dataset=train_dataset,
+                valid_dataset=valid_dataset,
+                min_value_static_params=min_value_static_params,
+                max_value_static_params=max_value_static_params,
+                static_param_perturb=static_param_perturb,
+                faulty_ckpt_paths=faulty_ckpt_paths,
+                faulty_static_values=faulty_static_values,
+            ) for _ in range(N)]
         )
 
     def forward(self, x, global_fault: Optional[Tuple[int, int]] = None):
@@ -856,6 +874,7 @@ class Inv(torch.nn.Module):
 class pLayer(torch.nn.Module):
     def __init__(self, n_in, n_out, args, layer_idx, INV, model_class, ckpt_path, surrogate_gradient,
                  train_dataset, valid_dataset, num_static_param, min_value_static_params, max_value_static_params,
+                 logger,
                  static_param_perturb: float,
                  faulty_ckpt_paths: Optional[List[str]] = None, 
                  faulty_static_values: Optional[List[float]] = None,  
@@ -869,7 +888,8 @@ class pLayer(torch.nn.Module):
                           faulty_ckpt_paths=faulty_ckpt_paths, 
                           faulty_static_values=faulty_static_values, 
                           static_param_perturb=static_param_perturb,
-                          layer_idx=layer_idx
+                          layer_idx=layer_idx,
+                          logger=logger,
                           )
         self.INV = INV
 
@@ -1056,6 +1076,7 @@ class pLayer(torch.nn.Module):
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
     def __init__(self, topology, args, model_class, ckpt_path, surrogate_gradient,
                  train_dataset, valid_dataset, 
+                 logger,
                  num_static_param: int, 
                  min_value_static_params: List[float], 
                  max_value_static_params: List[float],
@@ -1096,6 +1117,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
                         faulty_ckpt_paths=current_faulty_ckpts,
                         faulty_static_values=current_faulty_static_values,
                         static_param_perturb=static_param_perturb,
+                        logger=logger,
                     )
                 )
         self.last_fault_info = None
