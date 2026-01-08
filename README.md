@@ -1,4 +1,4 @@
-# 🧠 Flex-Spike: Analysis of Flexible Analog Spiking Neural Network Architecture for Neuromorphic Learning
+# Flex-Spike: Analysis of Flexible Analog Spiking Neural Network Architecture for Neuromorphic Learning
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -12,7 +12,7 @@
 | ![](Images/leakyParallel_simulation.png) | ![](Images/comparison_skip_conenction_8L.png) |
 
 
-## 🚀 Installation
+## Installation
 
 Clone the repository:
 
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ```
 
 
-## 🧩 Usage
+## Usage
 
 ### Surrogate
 
@@ -125,9 +125,27 @@ or
 slurm_full_network.sh
 ```
 
+### Analysis of Error Location and Error Type
+
+The file `analyze_faults_accs.py` can be used to analyze the final fully trained network.
+It will produce a dataset that looks like this:
+
+
+| batch_idx | mc_draw | accuracy | fault_layer | fault_location | fault_category | fault_type | fault_value |
+| --------- | ------- | -------- | ----------- | -------------- | -------------- | ---------- | ----------- |
+| 0         | 0       | 0.796875 | 1           | N0             | Neuron         | dynamic    | Idx_0       |
+| 0         | 1       | 0.40625  | 0           | In0_Out0       | Connection     | stuck_off  | stuck_off   |
+| 0         | 2       | 0.75     | 1           | N1             | Neuron         | static     | 0.0         |
+| 0         | 3       | 0.484375 | 1           | In1_Out4       | Connection     | stuck_on   | stuck_on    |
+| 0         | 4       | 0.84375  | 1           | In3_Out1       | Connection     | stuck_on   | stuck_on    |
+| 0         | 5       | 0.53125  | 1           | N3             | Neuron         | static     | 3.0         |
+| 0         | 6       | 0.84375  | 2           | In1_Out0       | Connection     | stuck_off  | stuck_off   |
+
+This dataset can be used to analyze how the **location** and **type** of fault influence the final performance of the model.
+
 
 <a id="data"></a>
-## 📂 Data
+## Data
 
 Experimental data for this project can be found:
 
@@ -135,7 +153,7 @@ Experimental data for this project can be found:
 * [V3 Dataset link 2](https://onedrive.live.com/?redeem=aHR0cHM6Ly8xZHJ2Lm1zL3UvYy9hMzEyODU0ODQ1OTRjMzcwL0VkQldtOTNkOWdSSXZka2t3czI2RXc0QkhrM3hnY2c2eUhtZmk4c0FramRfSEE%5FZT1DSk45eDE&cid=A31285484594C370&id=A31285484594C370%21sdd9b56d0f6dd4804bdd924c2cdba130e&parId=A31285484594C370%21s87f0f0b35302429b9760a98109d7923f&o=OneUp)
 
 
-## 🤝 Credits and References
+## Credits and References
 
 This repository is based on the ICCAD 2025 paper and its GitHub repo:
 **SpikeSynth: Energy-Efficient Adaptive Analog Printed Spiking Neural Networks**.
@@ -144,6 +162,6 @@ This repository is based on the ICCAD 2025 paper and its GitHub repo:
 *“Analog Printed Spiking Neuromorphic Circuit,”*
 2024 Design, Automation & Test in Europe Conference & Exhibition (DATE), IEEE, 2024.
 
-## 🪪 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
