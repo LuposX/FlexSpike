@@ -319,4 +319,5 @@ class GPT(nn.Module):
 
         # Regression head (projects back to 1-dimensional output per token)
         outputs = self.regression_head(x).squeeze()
+ 
         return outputs[:, :seq_len]  # Return only the sequence-related outputs

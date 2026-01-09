@@ -94,19 +94,33 @@ If your cluster uses **SLURM**, the `surrogate` folder provides SLURM scripts:
 SLURM logs are written to the `logs_slurm` directory.
 
 
-### Visualization
+### Utils
 
 The notebook `utils/generate_graphics.ipynb` can generate:
 
 * spiking neuron simulation plots
 * loss curves
 * spiking activity plots
-* gradient magnitude during backpropagation
+* gradient magnitudes during backpropagation
 * hyperparameter sweep contour plots
-* mean & standard deviation for repeated runs
-* improvement over baselines
+* mean & standard deviation across repeated runs
+* improvements over baselines
 * Bayesian improvement plots
-* bar plots for test metrics
+* bar plots for evaluation metrics
+
+The notebook `utils/get_power_usage.ipynb` downloads the best checkpoints for each experiment, stores them on disk, and produces a dataset capturing power usage under both fault and no-fault conditions.
+
+The script `utils/analyze_faults_accs.py` produces a dataset containing accuracy measurements as a function of fault location and fault type. This can be used to analyze which kinds of faults and which locations are particularly damaging to the network.It will produce a dataset that looks like this:
+
+| batch_idx | mc_draw | accuracy | fault_layer | fault_location | fault_category | fault_type | fault_value |
+| --------- | ------- | -------- | ----------- | -------------- | -------------- | ---------- | ----------- |
+| 0         | 0       | 0.796875 | 1           | N0             | Neuron         | dynamic    | Idx_0       |
+| 0         | 1       | 0.40625  | 0           | In0_Out0       | Connection     | stuck_off  | stuck_off   |
+| 0         | 2       | 0.75     | 1           | N1             | Neuron         | static     | 0.0         |
+| 0         | 3       | 0.484375 | 1           | In1_Out4       | Connection     | stuck_on   | stuck_on    |
+| 0         | 4       | 0.84375  | 1           | In3_Out1       | Connection     | stuck_on   | stuck_on    |
+| 0         | 5       | 0.53125  | 1           | N3             | Neuron         | static     | 3.0         |
+| 0         | 6       | 0.84375  | 2           | In1_Out0       | Connection     | stuck_off  | stuck_off   |
 
 
 ### Full Network
@@ -125,26 +139,7 @@ or
 slurm_full_network.sh
 ```
 
-### Analysis of Error Location and Error Type
 
-The file `analyze_faults_accs.py` can be used to analyze the final fully trained network.
-It will produce a dataset that looks like this:
-
-
-| batch_idx | mc_draw | accuracy | fault_layer | fault_location | fault_category | fault_type | fault_value |
-| --------- | ------- | -------- | ----------- | -------------- | -------------- | ---------- | ----------- |
-| 0         | 0       | 0.796875 | 1           | N0             | Neuron         | dynamic    | Idx_0       |
-| 0         | 1       | 0.40625  | 0           | In0_Out0       | Connection     | stuck_off  | stuck_off   |
-| 0         | 2       | 0.75     | 1           | N1             | Neuron         | static     | 0.0         |
-| 0         | 3       | 0.484375 | 1           | In1_Out4       | Connection     | stuck_on   | stuck_on    |
-| 0         | 4       | 0.84375  | 1           | In3_Out1       | Connection     | stuck_on   | stuck_on    |
-| 0         | 5       | 0.53125  | 1           | N3             | Neuron         | static     | 3.0         |
-| 0         | 6       | 0.84375  | 2           | In1_Out0       | Connection     | stuck_off  | stuck_off   |
-
-This dataset can be used to analyze how the **location** and **type** of fault influence the final performance of the model.
-
-
-<a id="data"></a>
 ## Data
 
 Experimental data for this project can be found:

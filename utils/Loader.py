@@ -304,21 +304,21 @@ def GetDataLoader(args, mode, path=None, batch_size=None):
 
     temporized_datasets = normal_datasets
 
-    temporal_datasets = ['Dataset_cbf.tsds',
-                         'Dataset_distalphalanxtw.tsds',
-                         'Dataset_freezerregulartrain.tsds',
-                         'Dataset_freezersmalltrain.tsds',
-                         'Dataset_gunpointagespan.tsds',
-                         'Dataset_gunpointmaleversusfemale.tsds',
-                         'Dataset_gunpointoldversusyoung.tsds',
-                         'Dataset_middlephalanxoutlineagegroup.tsds',
-                         'Dataset_mixedshapesregulartrain.tsds',
-                         'Dataset_powercons.tsds',
-                         'Dataset_proximalphalanxoutlinecorrect.tsds',
-                         'Dataset_selfregulationscp2.tsds',
-                         'Dataset_slope.tsds',
-                         'Dataset_smoothsubspace.tsds',
-                         'Dataset_symbols.tsds']
+    temporal_datasets = ['Dataset_cbf.tsds', # 0
+                         'Dataset_distalphalanxtw.tsds', # 1 
+                         'Dataset_freezerregulartrain.tsds', # 2 
+                         'Dataset_freezersmalltrain.tsds', # 3
+                         'Dataset_gunpointagespan.tsds', # 4
+                         'Dataset_gunpointmaleversusfemale.tsds', # 5
+                         'Dataset_gunpointoldversusyoung.tsds', # 6
+                         'Dataset_middlephalanxoutlineagegroup.tsds', # 7
+                         'Dataset_mixedshapesregulartrain.tsds', # 8
+                         'Dataset_powercons.tsds', # 9
+                         'Dataset_proximalphalanxoutlinecorrect.tsds', # 10
+                         'Dataset_selfregulationscp2.tsds', # 11
+                         'Dataset_slope.tsds', # 12
+                         'Dataset_smoothsubspace.tsds', # 13
+                         'Dataset_symbols.tsds'] # 14
 
     split_manufacture = ['Dataset_acuteinflammation.ds',
                          'Dataset_acutenephritis.ds',
