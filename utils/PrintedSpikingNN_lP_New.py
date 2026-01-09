@@ -135,6 +135,9 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.test_fault_history_by_level = {}
         self.test_acc_by_mc_draw = {} 
 
+        self.test_power_by_mc_draw = {}
+        self.test_power_fault_vs_no_fault_by_level = {}
+
 
     def forward(self, x):
         return self.network(x)
@@ -229,7 +232,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
     def on_test_epoch_end(self):
         """
         Evaluate the test set under different fault modes using MC sampling.
-        Collect per-MC-draw fault info & accuracy and upload a W&B table + JSON artifact.
+        Collect per-draw fault info & accuracy & power and upload a W&B table + JSON artifact.
         """
         # Save originals to restore later
         orig_mode = getattr(self.args, "fault_mode", "none")
@@ -261,7 +264,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             probs_list = []
             labels_list = []
     
-            # collect per-draw fault infos / accuracies as dicts
+            # collect per-draw fault infos / accuracies / power as dicts
             records = []
     
             draw_counter = 0
@@ -290,15 +293,20 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                         y_np = yb.detach().cpu().numpy()
                         draw_acc = float((pred_labels_k == y_np).mean())
     
-                        # record network power for this draw
-                        power_accum += float(self.network.power.detach().cpu().item())
+                        # record network power for this draw (scalar)
+                        draw_power = float(self.network.power.detach().cpu().item())
+                        power_accum += draw_power
     
-                        # append per-draw record with fault info
+                        # fault info
+                        fault_info = getattr(self.network, "last_fault_info", None)
+    
+                        # append per-draw record with fault info and power
                         rec = {
                             "mc_draw_idx": draw_counter,
                             "batch_idx": batch_counter,
                             "accuracy": draw_acc,
-                            "fault_info": getattr(self.network, "last_fault_info", None)  # may be None
+                            "power": draw_power,
+                            "fault_info": fault_info  # may be None
                         }
                         records.append(rec)
                         draw_counter += 1
@@ -328,22 +336,47 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             labels_all = torch.cat(labels_list, dim=0).numpy() if len(labels_list) else None
             mean_acc = acc_sum / (total_samples + 1e-12)
             mean_power = power_sum / (total_samples + 1e-12)
-            return mean_acc, mean_power, probs_all, labels_all, records
+
+            # Compute mean power when there was a recorded fault vs when there was not
+            fault_powers = []
+            nofault_powers = []
+            for r in records:
+                if r.get("fault_info") is None:
+                    nofault_powers.append(r.get("power", float("nan")))
+                else:
+                    fault_powers.append(r.get("power", float("nan")))
+            mean_power_fault = float(np.mean(fault_powers)) if len(fault_powers) > 0 else float("nan")
+            mean_power_nofault = float(np.mean(nofault_powers)) if len(nofault_powers) > 0 else float("nan")
+    
+            return mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault
     
         # Run sweep and log
         for mode in sweep_modes:
             eval_K = 1 if mode == "none" else eval_K_default
-            mean_acc, mean_power, probs_all, labels_all, records = evaluate_mode(mode, eval_K)
+            mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault = evaluate_mode(mode, eval_K)
     
-            # store the fault history and per-draw accuracies
+            # store the fault history and per-draw accuracies and powers
             self.test_fault_history_by_level[mode] = records
             self.test_acc_by_mc_draw[mode] = [r["accuracy"] for r in records]
+            self.test_power_by_mc_draw[mode] = [r["power"] for r in records]
+            self.test_power_fault_vs_no_fault_by_level[mode] = {
+                "fault": mean_power_fault,
+                "no_fault": mean_power_nofault,
+                "all": mean_power
+            }
     
             # log aggregated acc/power
             tag_acc = f"test_acc_mode_{mode}"
             tag_power = f"test_power_mode_{mode}"
+            tag_power_fault = f"test_power_mode_{mode}_fault"
+            tag_power_nofault = f"test_power_mode_{mode}_nofault"
             self.log(tag_acc, mean_acc, prog_bar=True, on_epoch=True)
             self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
+            # Log fault vs no-fault power (may be NaN if no draws of that kind occurred)
+            if not np.isnan(mean_power_fault):
+                self.log(tag_power_fault, float(mean_power_fault), prog_bar=False, on_epoch=True)
+            if not np.isnan(mean_power_nofault):
+                self.log(tag_power_nofault, float(mean_power_nofault), prog_bar=False, on_epoch=True)
     
             # ROC computation (unchanged from before)
             if self.compute_roc and (probs_all is not None) and (labels_all is not None):
@@ -384,10 +417,12 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                 table_rows = []
                 for rec in records:
                     fault = rec["fault_info"]
+                    # include power column
                     if fault is None:
                         row = [
                             rec["mc_draw_idx"], rec["batch_idx"],
                             None, None, None, None, None,
+                            rec["power"],
                             rec["accuracy"]
                         ]
                     else:
@@ -398,11 +433,12 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                             fault.get("layer"), fault.get("sg_idx"),
                             fault.get("fault_type"), fault.get("faulty_choice_idx"),
                             value,
+                            rec["power"],
                             rec["accuracy"]
                         ]
                     table_rows.append(row)
     
-                columns = ["mc_draw", "batch_idx", "layer", "sg_idx", "fault_type", "faulty_choice_idx", "value", "accuracy"]
+                columns = ["mc_draw", "batch_idx", "layer", "sg_idx", "fault_type", "faulty_choice_idx", "value", "power", "accuracy"]
                 fault_table = wandb.Table(columns=columns, data=table_rows)
     
                 # If using PL's WandbLogger, log via the experiment handle (preferred)
@@ -439,6 +475,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         setattr(self.args, "use_interpolation", orig_use_interp)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
+
 
     def UpdateArgs(self, args):
         """Keep compatibility with the original code and pick up changes to the new enable flag."""

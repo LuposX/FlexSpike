@@ -14,6 +14,7 @@ surrogate/lightning_logs/*
 surrogate/processed/*
 surrogate/pLSNN/*
 surrogate/models/*
+surrogate/fault_plots/*
 surrogate/wandb/*
 surrogate/.temp/*
 surrogate/data/small_dataset.ds
