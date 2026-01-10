@@ -13,6 +13,7 @@ models/*
 surrogate/lightning_logs/*
 surrogate/processed/*
 checkpoints/*
+utils/checkpoints/*
 surrogate/pLSNN/*
 surrogate/models/*
 surrogate/fault_plots/*
