@@ -15,3 +15,6 @@ scipy
 scikit-learn
 plotly
 snntorch
+pyarrow
+plotly
+openpyxl

@@ -16,6 +16,7 @@ checkpoints/*
 utils/checkpoints/*
 surrogate/pLSNN/*
 surrogate/models/*
+utils/plots/*
 surrogate/fault_plots/*
 surrogate/wandb/*
 surrogate/.temp/*

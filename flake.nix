@@ -38,6 +38,7 @@
               scikit-learn
 	      plotly
               pyarrow
+              openpyxl
 
               # Self built
               snntorch

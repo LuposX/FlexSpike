@@ -11,7 +11,7 @@ import torchmetrics
 import numpy as np
 from typing import Any, List, Optional, Union, Tuple
 
-from utils.evaluation import Evaluator
+from evaluation import Evaluator
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_curve, auc, roc_auc_score
