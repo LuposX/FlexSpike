@@ -162,6 +162,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--timelimit", type=float, default=10.0)
     p.add_argument("--compute-roc", type=bool, default=True)
     p.add_argument("--batch-size", type=int, default=None, help="Default batch size for train/valid/test (overridden by mode-specific flags).")
+    p.add_argument("--augment-data", type=bool, default=False, help="If enabled introduces noise to the dataset see utils.Loader.py for mroe details.")
+    p.add_argument("--DS-VAR", type=str, default='all' , choices=['jittering', 'time_warping', 'magnitude_scaling', 'all', 'none'], help="If enabled introduces noise to the dataset see utils.Loader.py for mroe details.")
 
     # new MC + fault args
     p.add_argument("--mc-samples", type=int, default=4, help="The number of monte carlo samples we want to use per trainigns instance.")
@@ -321,6 +323,7 @@ def run_train(args_cli: argparse.Namespace):
                 "TIMELIMITATION": args_cli.timelimit,
                 "LR_MIN": args_cli.lr_min if hasattr(args_cli, "lr_min") else args_cli.lr_min,
                 "LR": args_cli.lr,
+                "augment": args_cli.augment_data
             }
             if task_for_spec is not None:
                 overrides["TASK"] = task_for_spec
@@ -367,6 +370,7 @@ def run_train(args_cli: argparse.Namespace):
                 train_loader, datainfo = GetDataLoader(args, 'train', batch_size=args_cli.batch_size)
                 valid_loader, _ = GetDataLoader(args, 'valid', batch_size=args_cli.batch_size)
                 test_loader, _ = GetDataLoader(args, 'test', batch_size=args_cli.batch_size)
+                test_loader_aug,_ = GetDataLoader(args, mode='test', batch_size=args_cli.batch_size)
                 logger.info("Data loaders created successfully (dataset=%s task=%s run=%d)", dset, getattr(args, "task", None), run_idx)
             except Exception as e:
                 logger.exception("Failed creating data loaders for dataset %s (run %d): %s", dset, run_idx, e)
@@ -527,6 +531,7 @@ def run_train(args_cli: argparse.Namespace):
                     train_loader=train_loader,
                     valid_loader=valid_loader,
                     test_loader=test_loader,
+                    test_loader_aug=test_loader_aug,
                     surrogate_gradient=snn.surrogate.atan(),
                     num_static_param=num_static_param_arg,
                     min_value_static_params=min_value_static_params_arg,
@@ -538,7 +543,8 @@ def run_train(args_cli: argparse.Namespace):
                     warmup_epochs=args_cli.warmup_epochs,
                     enable_faults_during_training=args_cli.train_with_faults,
                     static_param_perturb=args_cli.static_param_perturb,
-                    logger=logger
+                    logger=logger,
+                    DS_VAR=args_cli.DS_VAR, 
                 )
                 logger.info("PrintedSpikingNetwork instantiated (surrogate_ckpt=%s, surrogate_class=%s, dataset=%s task=%s run=%d)",
                             surrogate_ckpt, args_cli.surrogate_class, dset, getattr(args, "task", None), run_idx)

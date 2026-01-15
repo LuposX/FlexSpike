@@ -11,7 +11,7 @@ import torchmetrics
 import numpy as np
 from typing import Any, List, Optional, Union, Tuple
 
-from evaluation import Evaluator
+from utils.evaluation import Evaluator
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_curve, auc, roc_auc_score
@@ -45,6 +45,8 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                  train_loader,
                  valid_loader,
                  test_loader,
+                 test_loader_aug,
+                 DS_VAR,
                  surrogate_gradient,
                  # either int (single main/faulty) or a tuple (main:int, faulty:int)
                  num_static_param: Union[int, Tuple[int, int]],
@@ -78,7 +80,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         # Save hyperparameters (ignore heavy objects)
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn',
-                                          'train_loader', 'valid_loader', 'test_loader'])
+                                          'train_loader', 'valid_loader', 'test_loader', 'test_loader_aug'])
 
         # Store MC + interpolation settings on args so downstream modules read them
         setattr(args, "mc_samples", int(mc_samples))
@@ -125,6 +127,9 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
+        self.test_loader_aug = test_loader_aug
+        self.DS_VAR = DS_VAR
+        setattr(self.args, "DS_VAR", DS_VAR)
 
         # ROC computation toggle (only used at test time)
         self.compute_roc = bool(getattr(self.args, "compute_roc", True))
@@ -137,6 +142,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
         self.test_power_by_mc_draw = {}
         self.test_power_fault_vs_no_fault_by_level = {}
+        self.test_spike_by_mc_draw = {}
 
 
     def forward(self, x):
@@ -231,15 +237,16 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
     def on_test_epoch_end(self):
         """
-        Evaluate the test set under different fault modes using MC sampling.
-        Collect per-draw fault info & accuracy & power and upload a W&B table + JSON artifact.
+        Evaluate the test set(s):
+         - Run the configured fault-mode sweep on self.test_loader (fault-aware).
+         - Then run a single no-fault evaluation on self.test_loader_aug (if provided) with no fault injection.
         """
         # Save originals to restore later
         orig_mode = getattr(self.args, "fault_mode", "none")
         orig_mc = int(getattr(self.args, "mc_samples", 1))
         orig_use_interp = bool(getattr(self.args, "use_interpolation", False))
-    
-        # Determine modes to sweep
+
+        # Determine modes to sweep for the main test_loader
         configured_modes = getattr(self.args, "test_fault_modes", None)
         if configured_modes is None:
             sweep_modes = ["none", "single"]
@@ -247,40 +254,43 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
             sweep_modes = [str(m) for m in configured_modes]
         if "none" not in sweep_modes:
             sweep_modes = ["none"] + sweep_modes
-    
+
         # decide eval_K default: args.eval_mc_samples else args.mc_samples else 1
         eval_K_default = int(getattr(self.args, "eval_mc_samples", getattr(self.args, "mc_samples", 1)))
-    
-        def evaluate_mode(mode: str, eval_K: int):
-            """Evaluate the entire test_loader for a single fault mode and return metrics and per-draw records."""
+
+        def evaluate_mode(mode: str, eval_K: int, loader) -> tuple:
+            """
+            Evaluate the provided loader under a single fault mode.
+            Returns: mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault
+            """
             setattr(self.args, "fault_mode", mode)
             if hasattr(self.network, "UpdateArgs"):
                 self.network.UpdateArgs(self.args)
             self.network.eval()
-    
+
             total_samples = 0
             acc_sum = 0.0
             power_sum = 0.0
             probs_list = []
             labels_list = []
-    
+
             # collect per-draw fault infos / accuracies / power as dicts
             records = []
-    
+
             draw_counter = 0
             batch_counter = 0
-    
+
             with torch.no_grad():
-                for xb, yb in self.test_loader:
+                for xb, yb in loader:
                     xb = xb.to(self.network.DEVICE)
                     yb = yb.to(self.network.DEVICE)
                     B = xb.shape[0]
                     total_samples += B
-    
+
                     # accumulate probabilities (numpy) and power across MC draws
                     probs_accum = None
                     power_accum = 0.0
-    
+
                     # For each MC draw (independent forward)
                     for k in range(eval_K):
                         preds = self.network(xb)  # this sets self.network.last_fault_info per forward
@@ -292,46 +302,52 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                         pred_labels_k = np.argmax(probs_k, axis=1)
                         y_np = yb.detach().cpu().numpy()
                         draw_acc = float((pred_labels_k == y_np).mean())
-    
+
                         # record network power for this draw (scalar)
                         draw_power = float(self.network.power.detach().cpu().item())
                         power_accum += draw_power
-    
-                        # fault info
+
+                        # fault info (may be None)
                         fault_info = getattr(self.network, "last_fault_info", None)
-    
+
+                        # record spike counts emitted by the network in this forward
+                        draw_spike_total = getattr(self.network, "last_spike_count_total", None)
+                        draw_spike_per_sample = getattr(self.network, "last_spike_count_per_sample", None)
+
                         # append per-draw record with fault info and power
                         rec = {
                             "mc_draw_idx": draw_counter,
                             "batch_idx": batch_counter,
                             "accuracy": draw_acc,
                             "power": draw_power,
-                            "fault_info": fault_info  # may be None
+                            "fault_info": fault_info,
+                            "spike_total": float(draw_spike_total) if draw_spike_total is not None else float("nan"),
+                            "spike_per_sample": float(draw_spike_per_sample) if draw_spike_per_sample is not None else float("nan"),
                         }
                         records.append(rec)
                         draw_counter += 1
-    
+
                         # accumulate probs for eventual averaging across K draws
                         if probs_accum is None:
                             probs_accum = probs_k
                         else:
                             probs_accum += probs_k
-    
+
                     # After K draws for this minibatch -> compute averaged probs & batch-level aggregated acc for final metric
                     probs_mean = probs_accum / float(eval_K)  # (B, C) numpy
                     mean_power_batch = power_accum / float(eval_K)
-    
+
                     preds_labels = np.argmax(probs_mean, axis=1)
                     batch_acc = (preds_labels == y_np).mean()
-    
+
                     acc_sum += float(batch_acc) * B
                     power_sum += float(mean_power_batch) * B
-    
+
                     probs_list.append(torch.from_numpy(probs_mean))
                     labels_list.append(torch.from_numpy(y_np))
-    
+
                     batch_counter += 1
-    
+
             probs_all = torch.cat(probs_list, dim=0).numpy() if len(probs_list) else None
             labels_all = torch.cat(labels_list, dim=0).numpy() if len(labels_list) else None
             mean_acc = acc_sum / (total_samples + 1e-12)
@@ -347,14 +363,60 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                     fault_powers.append(r.get("power", float("nan")))
             mean_power_fault = float(np.mean(fault_powers)) if len(fault_powers) > 0 else float("nan")
             mean_power_nofault = float(np.mean(nofault_powers)) if len(nofault_powers) > 0 else float("nan")
-    
-            return mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault
-    
-        # Run sweep and log
+
+            # compute mean spike-per-sample when fault present vs not
+            spike_faults = []
+            spike_nofaults = []
+            for r in records:
+                if r.get("fault_info") is None:
+                    spike_nofaults.append(r.get("spike_per_sample", float("nan")))
+                else:
+                    spike_faults.append(r.get("spike_per_sample", float("nan")))
+            mean_spike_fault = float(np.mean(spike_faults)) if len(spike_faults) > 0 else float("nan")
+            mean_spike_nofault = float(np.mean(spike_nofaults)) if len(spike_nofaults) > 0 else float("nan")
+
+            return mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault, mean_spike_fault, mean_spike_nofault
+
+
+
+        # -------------------------
+        # 1) Run sweep on main test_loader
+        # -------------------------
         for mode in sweep_modes:
             eval_K = 1 if mode == "none" else eval_K_default
-            mean_acc, mean_power, probs_all, labels_all, records, mean_power_fault, mean_power_nofault = evaluate_mode(mode, eval_K)
-    
+            (mean_acc, mean_power, probs_all, labels_all, records,
+             mean_power_fault, mean_power_nofault,
+             mean_spike_fault, mean_spike_nofault) = evaluate_mode(mode, eval_K, self.test_loader)
+
+            # store spike history summary
+            self.test_power_fault_vs_no_fault_by_level[mode] = {
+                "fault": mean_power_fault,
+                "no_fault": mean_power_nofault,
+                "all": mean_power
+            }
+
+            # add spike summary store (create container if needed)
+            if not hasattr(self, "test_spike_fault_vs_no_fault_by_level"):
+                self.test_spike_fault_vs_no_fault_by_level = {}
+            self.test_spike_fault_vs_no_fault_by_level[mode] = {
+                "fault": mean_spike_fault,
+                "no_fault": mean_spike_nofault,
+            }
+
+            # log aggregated spikes as metric
+            tag_spikes = f"test_spike_per_sample_mode_{mode}"
+            if not np.isnan(mean_spike_nofault):
+                # prefer per-sample no-fault value to log as main indicator for 'none' case
+                self.log(tag_spikes, float(mean_spike_nofault if mode != "none" else (mean_spike_nofault)), on_epoch=True, prog_bar=True)
+            else:
+                # if nan, try mean_spike_fault or overall approximate
+                try:
+                    overall_mean_spike = float(np.nanmean([r.get("spike_per_sample", float("nan")) for r in records]))
+                    self.log(tag_spikes, overall_mean_spike, on_epoch=True, prog_bar=True)
+                except Exception:
+                    pass
+
+
             # store the fault history and per-draw accuracies and powers
             self.test_fault_history_by_level[mode] = records
             self.test_acc_by_mc_draw[mode] = [r["accuracy"] for r in records]
@@ -364,21 +426,20 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                 "no_fault": mean_power_nofault,
                 "all": mean_power
             }
-    
-            # log aggregated acc/power
+
+            # log aggregated acc/power with original naming
             tag_acc = f"test_acc_mode_{mode}"
             tag_power = f"test_power_mode_{mode}"
             tag_power_fault = f"test_power_mode_{mode}_fault"
             tag_power_nofault = f"test_power_mode_{mode}_nofault"
             self.log(tag_acc, mean_acc, prog_bar=True, on_epoch=True)
             self.log(tag_power, mean_power, prog_bar=False, on_epoch=True)
-            # Log fault vs no-fault power (may be NaN if no draws of that kind occurred)
             if not np.isnan(mean_power_fault):
                 self.log(tag_power_fault, float(mean_power_fault), prog_bar=False, on_epoch=True)
             if not np.isnan(mean_power_nofault):
                 self.log(tag_power_nofault, float(mean_power_nofault), prog_bar=False, on_epoch=True)
-    
-            # ROC computation (unchanged from before)
+
+            # ROC computation for main loader
             if self.compute_roc and (probs_all is not None) and (labels_all is not None):
                 num_classes = probs_all.shape[1]
                 if num_classes == 1:
@@ -396,13 +457,14 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                     y_true = label_binarize(labels_all, classes=list(range(num_classes)))
                     fpr, tpr, _ = roc_curve(y_true.ravel(), probs_all.ravel())
                     auc_micro = roc_auc_score(y_true, probs_all, average='micro', multi_class='ovr')
-    
+
                 tag_auc = f"test_roc_micro_auc_mode_{mode}"
                 if mode == "none":
                     self.log("test_roc_micro_auc", float(auc_micro), on_epoch=True, prog_bar=True)
                 self.log(tag_auc, float(auc_micro), on_epoch=True, prog_bar=True)
                 self.test_roc_curve_by_level[mode] = (fpr, tpr)
-    
+
+                # wandb logging (best-effort)
                 if hasattr(self, "logger") and isinstance(self.logger, pl.loggers.WandbLogger):
                     roc_table = wandb.Table(columns=["fpr", "tpr"], data=list(zip(fpr, tpr)))
                     self.logger.experiment.log({
@@ -410,42 +472,68 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                             roc_table, "fpr", "tpr", title=f"ROC Curve (mode={mode})"
                         )
                     })
-    
-            # --- WandB logging for per-draw records ---
+
+            # wandb per-draw table logging (keeps original behaviour)
             try:
-                # Build table rows
+                # recommended: include both a human-readable string and a numeric column (when available)
+                columns = [
+                    "mc_draw", "batch_idx",
+                    "layer", "sg_idx",
+                    "fault_type", "faulty_choice_idx",
+                    "value", "value_numeric",
+                    "power", "spike_total", "spike_per_sample", "accuracy"
+                ]
                 table_rows = []
                 for rec in records:
                     fault = rec["fault_info"]
-                    # include power column
+                    # default
+                    value_str = None
+                    value_num = None
+                
+                    if fault is not None:
+                        raw_val = fault.get("static_value", fault.get("ckpt_path", None))
+                        # prefer numeric if it's numeric, but always produce a string
+                        if isinstance(raw_val, (int, float)):
+                            value_str = str(raw_val)
+                            value_num = float(raw_val)
+                        else:
+                            # raw_val may be a string path (ckpt_path) or None — represent it as a string if not None
+                            value_str = str(raw_val) if raw_val is not None else None
+                            # attempt to recover numeric value if possible
+                            try:
+                                value_num = float(raw_val)
+                            except Exception:
+                                value_num = None
+                
+                    # fill other cols
                     if fault is None:
                         row = [
                             rec["mc_draw_idx"], rec["batch_idx"],
-                            None, None, None, None, None,
-                            rec["power"],
-                            rec["accuracy"]
+                            None, None,
+                            None, None,
+                            value_str, value_num,
+                            rec.get("power", float("nan")),
+                            rec.get("spike_total", float("nan")),
+                            rec.get("spike_per_sample", float("nan")),
+                            rec.get("accuracy", float("nan"))
                         ]
                     else:
-                        # fault dict may have keys: layer, sg_idx, fault_type, faulty_choice_idx, static_value/ckpt_path
-                        value = fault.get("static_value", fault.get("ckpt_path", None))
                         row = [
                             rec["mc_draw_idx"], rec["batch_idx"],
                             fault.get("layer"), fault.get("sg_idx"),
                             fault.get("fault_type"), fault.get("faulty_choice_idx"),
-                            value,
-                            rec["power"],
-                            rec["accuracy"]
+                            value_str, value_num,
+                            rec.get("power", float("nan")),
+                            rec.get("spike_total", float("nan")),
+                            rec.get("spike_per_sample", float("nan")),
+                            rec.get("accuracy", float("nan"))
                         ]
                     table_rows.append(row)
-    
-                columns = ["mc_draw", "batch_idx", "layer", "sg_idx", "fault_type", "faulty_choice_idx", "value", "power", "accuracy"]
                 fault_table = wandb.Table(columns=columns, data=table_rows)
-    
-                # If using PL's WandbLogger, log via the experiment handle (preferred)
+
                 if hasattr(self, "logger") and isinstance(self.logger, pl.loggers.WandbLogger):
                     run = self.logger.experiment
                     run.log({f"fault_history_table_mode_{mode}": fault_table})
-                    # Also upload JSON artifact for full records
                     tmpdir = tempfile.gettempdir()
                     fname = f"fault_history_{mode}_{int(time.time())}.json"
                     fpath = os.path.join(tmpdir, fname)
@@ -455,7 +543,6 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                     artifact.add_file(fpath)
                     run.log_artifact(artifact)
                 else:
-                    # Fallback to global wandb API (requires an active run)
                     wandb.log({f"fault_history_table_mode_{mode}": fault_table})
                     tmpdir = tempfile.gettempdir()
                     fname = f"fault_history_{mode}_{int(time.time())}.json"
@@ -465,14 +552,162 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
                     artifact = wandb.Artifact(f"fault_history_{mode}", type="fault_data")
                     wandb.run.log_artifact(artifact)
             except Exception as e:
-                # Fail gracefully — do not crash the whole test sweep if wandb logging fails
                 self.log("wandb_fault_history_upload_error", 1.0, prog_bar=False, on_epoch=True)
                 print("Warning: failed to upload fault-history to wandb:", e)
-    
+
+        # -------------------------
+        # 2) Run no-fault evaluation(s) on test_loader_aug (if provided)
+        #    - if DS_VAR == 'all' run all 3 augmentations, else run the single requested one
+        #    - always force fault_mode='none' for these augmented tests
+        # -------------------------
+        if hasattr(self, "test_loader_aug") and (self.test_loader_aug is not None) and (self.test_loader_aug is not 'none'):
+            # save original DS_VAR so we can restore later
+            orig_ds_var = getattr(self.args, "DS_VAR", "none")
+
+            # determine list of augmentations to run
+            if getattr(self, "DS_VAR", None) == "all" or getattr(self.args, "DS_VAR", None) == "all":
+                aug_list = ['jittering', 'time_warping', 'magnitude_scaling']
+            else:
+                # prefer module-level value but fall back to args
+                chosen = getattr(self, "DS_VAR", None) or getattr(self.args, "DS_VAR", None)
+                if chosen is None:
+                    aug_list = []
+                else:
+                    aug_list = [chosen]
+
+            # force no faults for augmented runs
+            setattr(self.args, "fault_mode", "none")
+            if hasattr(self.network, "UpdateArgs"):
+                self.network.UpdateArgs(self.args)
+
+            # evaluate each augmentation
+            for aug in aug_list:
+                # set DS_VAR so CustomDataset.simulate_variation uses the right augmentation
+                setattr(self.args, "DS_VAR", aug)
+                if hasattr(self.network, "UpdateArgs"):
+                    self.network.UpdateArgs(self.args)
+
+                # evaluate once (no MC sampling for these augmented checks)
+                (mean_acc_aug, mean_power_aug, probs_all_aug, labels_all_aug, records_aug,
+                 mean_power_fault_aug, mean_power_nofault_aug,
+                 mean_spike_fault_aug, mean_spike_nofault_aug) = evaluate_mode("none", 1, self.test_loader_aug)
+
+                # store under distinct keys per augmentation
+                key = f"aug_{aug}"
+                self.test_fault_history_by_level[key] = records_aug
+                self.test_acc_by_mc_draw[key] = [r["accuracy"] for r in records_aug]
+                self.test_power_by_mc_draw[key] = [r["power"] for r in records_aug]
+                self.test_spike_by_mc_draw[key] = [r.get("spike_per_sample", float("nan")) for r in records_aug]
+                self.test_power_fault_vs_no_fault_by_level[key] = {
+                    "fault": float("nan"),
+                    "no_fault": float(np.mean([r["power"] for r in records_aug])) if len(records_aug) else float("nan"),
+                    "all": mean_power_aug
+                }
+
+                # log aggregated metrics with unique names
+                self.log(f"test_acc_aug_{aug}", float(mean_acc_aug), prog_bar=True, on_epoch=True)
+                self.log(f"test_power_aug_{aug}", float(mean_power_aug), prog_bar=False, on_epoch=True)
+
+                # optionally compute ROC (keeps same behavior as before but under unique tags)
+                if self.compute_roc and (probs_all_aug is not None) and (labels_all_aug is not None):
+                    num_classes = probs_all_aug.shape[1]
+                    if num_classes == 1:
+                        try:
+                            fpr, tpr, _ = roc_curve(labels_all_aug, probs_all_aug[:, 0])
+                            auc_micro = auc(fpr, tpr)
+                        except Exception:
+                            fpr, tpr = np.array([]), np.array([])
+                            auc_micro = float("nan")
+                    elif num_classes == 2:
+                        y_score = probs_all_aug[:, 1]
+                        fpr, tpr, _ = roc_curve(labels_all_aug, y_score)
+                        auc_micro = auc(fpr, tpr)
+                    else:
+                        y_true = label_binarize(labels_all_aug, classes=list(range(num_classes)))
+                        fpr, tpr, _ = roc_curve(y_true.ravel(), probs_all_aug.ravel())
+                        auc_micro = roc_auc_score(y_true, probs_all_aug, average='micro', multi_class='ovr')
+
+                    self.log(f"test_roc_micro_auc_aug_{aug}", float(auc_micro), on_epoch=True, prog_bar=True)
+                    self.test_roc_curve_by_level[f"aug_{aug}"] = (fpr, tpr)
+
+                # (Optional) WandB per-draw table logging for this augmented run (keeps format consistent)
+                try:
+                    columns = [
+                        "mc_draw", "batch_idx",
+                        "layer", "sg_idx",
+                        "fault_type", "faulty_choice_idx",
+                        "value", "value_numeric",
+                        "power", "spike_total", "spike_per_sample", "accuracy"
+                    ]
+                    table_rows = []
+                    for rec in records_aug:
+                        fault = rec["fault_info"]
+                        # default
+                        value_str = None
+                        value_num = None
+                    
+                        if fault is not None:
+                            raw_val = fault.get("static_value", fault.get("ckpt_path", None))
+                            # prefer numeric if it's numeric, but always produce a string
+                            if isinstance(raw_val, (int, float)):
+                                value_str = str(raw_val)
+                                value_num = float(raw_val)
+                            else:
+                                # raw_val may be a string path (ckpt_path) or None — represent it as a string if not None
+                                value_str = str(raw_val) if raw_val is not None else None
+                                # attempt to recover numeric value if possible
+                                try:
+                                    value_num = float(raw_val)
+                                except Exception:
+                                    value_num = None
+                    
+                        # fill other cols
+                        if fault is None:
+                            row = [
+                                rec["mc_draw_idx"], rec["batch_idx"],
+                                None, None,
+                                None, None,
+                                value_str, value_num,
+                                rec.get("power", float("nan")),
+                                rec.get("spike_total", float("nan")),
+                                rec.get("spike_per_sample", float("nan")),
+                                rec.get("accuracy", float("nan"))
+                            ]
+                        else:
+                            row = [
+                                rec["mc_draw_idx"], rec["batch_idx"],
+                                fault.get("layer"), fault.get("sg_idx"),
+                                fault.get("fault_type"), fault.get("faulty_choice_idx"),
+                                value_str, value_num,
+                                rec.get("power", float("nan")),
+                                rec.get("spike_total", float("nan")),
+                                rec.get("spike_per_sample", float("nan")),
+                                rec.get("accuracy", float("nan"))
+                            ]
+                        table_rows.append(row)
+                    aug_table = wandb.Table(columns=columns, data=table_rows)
+                    if hasattr(self, "logger") and isinstance(self.logger, pl.loggers.WandbLogger):
+                        run = self.logger.experiment
+                        run.log({f"fault_history_table_aug_{aug}": aug_table})
+                    else:
+                        wandb.log({f"fault_history_table_aug_{aug}": aug_table})
+                except Exception as e:
+                    self.log(f"wandb_fault_history_upload_error_aug_{aug}", 1.0, prog_bar=False, on_epoch=True)
+                    print("Warning: failed to upload aug fault-history to wandb for", aug, ":", e)
+
+            # restore DS_VAR original
+            setattr(self.args, "DS_VAR", orig_ds_var)
+            if hasattr(self.network, "UpdateArgs"):
+                self.network.UpdateArgs(self.args)
+
+
+        # -------------------------
         # Restore originals
+        # -------------------------
         setattr(self.args, "fault_mode", orig_mode)
         setattr(self.args, "mc_samples", orig_mc)
         setattr(self.args, "use_interpolation", orig_use_interp)
+        setattr(self.args, "DS_VAR", orig_ds_var)
         if hasattr(self.network, "UpdateArgs"):
             self.network.UpdateArgs(self.args)
 
@@ -636,6 +871,27 @@ class pSpikeGenerator(nn.Module):
         # ensure shapes broadcastable: low/high are (num_static_param,), raw (1,num_static_param)
         return c + r * torch.tanh(raw_params)
 
+    def _count_spikes_tensor(self, out):
+        """Return integer count of non-zero elements interpreted as spikes.
+        Supports shapes (B,T), (B,1,T) or (B,C,T) where C==1."""
+        if out is None:
+            return 0
+        o = out
+        # normalize shape to (B, T)
+        if o.dim() == 3:
+            if o.shape[1] == 1:
+                o2 = o.squeeze(1)  # (B, T)
+            else:
+                # sum across channels if multiple present (unlikely for SG) -> (B,T)
+                o2 = o.sum(dim=1)
+        elif o.dim() == 2:
+            o2 = o
+        else:
+            return 0
+        # consider any non-zero as a spike (robust vs floats)
+        return int((o2 != 0).sum().detach().cpu().item())
+
+
     def forward(self, x, force_fault: Optional[bool] = None, disable_interpolation: Optional[bool] = None):
         """
         Forward with optional forced fault behavior.
@@ -699,13 +955,18 @@ class pSpikeGenerator(nn.Module):
     
         if len(self.faulty_spike_generators) == 0 and not faulty_static_exists:
             if out_main.dim() == 3 and out_main.shape[1] == 1:
+                self.last_spike_count = self._count_spikes_tensor(out_main)
                 return out_main.squeeze(1)
+            self.last_spike_count = self._count_spikes_tensor(out_main)
             return out_main
+
     
         # If force_fault is None -> default to no-fault behavior (we rely on SGLayer to explicitly request faults)
         if force_fault is None or force_fault is False:
             if out_main.dim() == 3 and out_main.shape[1] == 1:
+                self.last_spike_count = self._count_spikes_tensor(out_main)
                 return out_main.squeeze(1)
+            self.last_spike_count = self._count_spikes_tensor(out_main)
             return out_main
     
         # force_fault == True -> use a randomly selected faulty neuron (either dynamic or static)
@@ -779,6 +1040,11 @@ class pSpikeGenerator(nn.Module):
         # alpha_tensor is broadcasted over time. Since force_fault=True, alpha_val = alpha_eff.
         alpha_tensor = alpha_eff  # scalar in [0,1]
         out_mixed = (1.0 - alpha_tensor) * out_m + alpha_tensor * out_f  # (B,1,T)
+
+        try:
+            self.last_spike_count = self._count_spikes_tensor(out_mixed)
+        except Exception:
+            self.last_spike_count = 0
     
         return out_mixed.squeeze(1)  # (B, T)
 
@@ -876,9 +1142,35 @@ class SGLayer(torch.nn.Module):
                     "sg_idx": n,
                     **self.SG_Group[n].last_fault_info
                 }
-                # don't break — keep producing outputs (but we've recorded the fault info)
+                
         # result list length N with each item shaped (B, C_out, T) or (B, T)
-        return torch.stack(result).permute(1, 0, 2)
+        out_stack = torch.stack(result).permute(1, 0, 2)
+
+        # aggregate spike counts from underlying pSpikeGenerators (if available)
+        total_spikes = 0
+        for n in range(N):
+            sg = self.SG_Group[n]
+            sg_spikes = getattr(sg, "last_spike_count", None)
+            if sg_spikes is None:
+                # as a fallback try to compute from the output we collected (result[n])
+                try:
+                    local_out = result[n]
+                    if local_out is not None:
+                        # use same counting heuristic as in pSpikeGenerator
+                        if local_out.dim() == 3 and local_out.shape[1] == 1:
+                            local_count = (local_out.squeeze(1) != 0).sum().detach().cpu().item()
+                        elif local_out.dim() == 2:
+                            local_count = (local_out != 0).sum().detach().cpu().item()
+                        else:
+                            local_count = 0
+                        total_spikes += int(local_count)
+                except Exception:
+                    pass
+            else:
+                total_spikes += int(sg_spikes)
+        self.last_spike_count = int(total_spikes)
+        return out_stack
+
 
     @property
     def DEVICE(self):
@@ -1062,6 +1354,7 @@ class pLayer(torch.nn.Module):
         z_new = torch.stack(result, dim=2)
         self.power = self.power / T
         a_new = self.SG(z_new, global_fault=global_fault)
+        self.last_spike_count = int(getattr(self.SG, "last_spike_count", 0) or 0)
         # If SG reported a neuron-level fault, keep that (it overrides connection info)
         sg_fault = getattr(self.SG, "last_fault_info", None)
         if sg_fault:
@@ -1210,6 +1503,10 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
         out = x
         self.last_fault_info = None
 
+        # Prepare spike accumulation
+        batch_size = x.shape[0] if (hasattr(x, "shape") and len(x.shape) > 0) else 1
+        total_spikes = 0
+
         for i, layer in enumerate(self.model):
             # Clear any previous conn fault on layer
             if hasattr(layer, "conn_fault"):
@@ -1242,6 +1539,17 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
             layer_info = getattr(layer, "last_fault_info", None)
             if layer_info:
                 self.last_fault_info = layer_info
+            # accumulate spikes reported by this layer (if any)
+            try:
+                layer_spikes = int(getattr(layer, "last_spike_count", 0) or 0)
+            except Exception:
+                layer_spikes = 0
+            total_spikes += layer_spikes
+
+        # expose totals on network for external evaluation use
+        self.last_spike_count_total = int(total_spikes)
+        # also per-sample average spikes (float)
+        self.last_spike_count_per_sample = float(total_spikes) / float(batch_size) if batch_size > 0 else float("nan")
 
         return out
 

@@ -34,6 +34,7 @@ echo "[$(date)] Environment variables exported."
 echo "[$(date)] Starting Python script..."
 
 # To train with fault use: --train-with-faults
+# To train with augmented data use: --augment-data True
 python -u train_full_network.py \
   --project flexible-printed-network \
   --experiment PSNN_wSurrGPT_wFaults \
@@ -55,4 +56,6 @@ python -u train_full_network.py \
   --spawn-sequential \
   --static-param-perturb 0.05 \
   --datasets "temporized:0-4, temporal:0,1,2,4,7,8,9,10,11,12" \
-  --train-with-faults
+  --train-with-faults \
+  --augment-data False \
+  --DS-VAR "all"

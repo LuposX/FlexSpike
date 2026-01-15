@@ -260,19 +260,75 @@ class CustomDataset(Dataset):
         return x.float(), y
 
     def simulate_variation(self, x, ds_var='none'):
-        """Simulate realistic variations in the test data."""
-        if ds_var == 'jittering':
-            # Example: Apply controlled Gaussian nois
-            x = self.jittering(x, noise_level=self.noise_level)
-        elif ds_var == 'time_warping':
-            # Example: Apply time warping if needed
-            x = self.time_warping(x, warp_factor=self.warp_factor)
-        elif ds_var == 'magnitude_scaling':
-            # Example: Apply magnitude scaling if needed
-            x = self.magnitude_scaling(
-                x, scaling_factor_range=self.scaling_factor_range)
+        """Simulate realistic variations in the test data.
 
-        return x
+        Accepts either:
+          - a single sample tensor with shape (D, T)  OR (D,)  OR
+          - a batched tensor with shape (B, D, T)
+
+        Returns the augmented tensor with the same leading batch semantics as input:
+          - if input was single sample -> returns single sample (same ndim as input except dtype)
+          - if input was batch -> returns batch
+
+        Note: time-based augmentations (time_warping, random_cropping, magnitude_scaling)
+        require a time axis T > 1. If T is missing or equals 1, those augmentations are skipped.
+        """
+        # Fast path: no variation requested
+        if ds_var is None or ds_var == 'none':
+            return x
+
+        # remember if input is a single sample (non-batched)
+        was_single = False
+        # convert numpy to tensor defensively (in case)
+        if isinstance(x, np.ndarray):
+            x = torch.from_numpy(x).to(self.X.device if hasattr(self, "X") else None)
+
+        if x.dim() == 1:
+            # (D,) -> treat as (D, 1)
+            x = x.unsqueeze(-1)
+            was_single = True
+        if x.dim() == 2:
+            # single sample (D, T) -> make batch (1, D, T)
+            x = x.unsqueeze(0)
+            was_single = True
+        # now x is expected (B, D, T)
+        if x.dim() != 3:
+            # Not a time-series shaped tensor; just return jitter if possible
+            try:
+                return x + torch.normal(mean=0.0, std=self.noise_level, size=x.shape, device=x.device)
+            except Exception:
+                return x
+
+        B, D, T = x.shape
+
+        # If there is effectively no time axis (T <= 1) then skip time-based ops
+        allow_time_ops = (T > 1)
+
+        if ds_var == 'jittering':
+            out = self.jittering(x, noise_level=self.noise_level)
+        elif ds_var == 'time_warping':
+            if not allow_time_ops:
+                # fallback to jittering if time-warping not applicable
+                out = self.jittering(x, noise_level=self.noise_level)
+            else:
+                out = self.time_warping(x, warp_factor=self.warp_factor)
+        elif ds_var == 'magnitude_scaling':
+            if not allow_time_ops:
+                out = self.jittering(x, noise_level=self.noise_level)
+            else:
+                out = self.magnitude_scaling(x, scaling_factor_range=self.scaling_factor_range)
+        else:
+            # unknown ds_var -> no change
+            out = x
+
+        # restore single-sample shape if needed
+        if was_single:
+            out = out.squeeze(0)  # (1,D,T) -> (D,T) or (D,) depending on earlier transforms
+            # if original was 1-D, we had added an extra time dim: squeeze last dim if T==1
+            if out.dim() == 2 and out.shape[1] == 1:
+                out = out.squeeze(-1)
+        return out
+
 
     def __len__(self):
         """Return the number of samples in the dataset."""
