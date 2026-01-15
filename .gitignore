@@ -12,6 +12,7 @@ wandb/*
 models/*
 surrogate/lightning_logs/*
 surrogate/processed/*
+utils/results/*
 checkpoints/*
 utils/checkpoints/*
 surrogate/pLSNN/*
