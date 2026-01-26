@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
+
 
 class GPTLightning(pl.LightningModule):
     """
@@ -52,9 +52,43 @@ class GPTLightning(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        loss, preds, y = self._compute_loss_and_preds(batch)
-        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        X_batch, y_batch = batch
+        outputs = self(X_batch).detach()
+        
+        y_true = outputs
+        
+        # Mean Squared Error
+        mse = F.mse_loss(outputs, y_true)
+        
+        # Mean Absolute Error
+        mae = F.l1_loss(outputs, y_true)
+        
+        # R^2 score
+        ss_res = torch.sum((y_true - outputs) ** 2)
+        ss_tot = torch.sum((y_true - y_true.mean()) ** 2)
+        r2 = 1 - ss_res / (ss_tot + 1e-8)
+        
+        # Pearson correlation
+        p_mean = outputs.mean(dim=0, keepdim=True)
+        t_mean = y_true.mean(dim=0, keepdim=True)
+        numerator = torch.sum((outputs - p_mean) * (y_true - t_mean))
+        denominator = torch.sqrt(torch.sum((outputs - p_mean) ** 2) * torch.sum((y_true - t_mean) ** 2) + 1e-8)
+        pearson = numerator / denominator
+        
+        # Log metrics
+        self.log_dict({
+            "test_mse": mse,
+            "test_mae": mae,
+            "test_r2": r2,
+            "test_pearson": pearson
+            }, prog_bar=True, on_step=False, on_epoch=True)
+        
+        return {
+            "test_mse": mse,
+            "test_mae": mae,
+            "test_r2": r2,
+            "test_pearson": pearson
+            }
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, _ = batch

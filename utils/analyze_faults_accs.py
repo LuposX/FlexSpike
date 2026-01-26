@@ -162,5 +162,5 @@ if __name__ == "__main__":
     
     # 3. Save and Inspect
     print(df.head())
-    df.to_csv("fault_analysis_results.csv", index=False)
+    df.to_csv("results/fault_analysis_results.csv", index=False)
     print("Analysis saved to fault_analysis_results.csv")

@@ -121,7 +121,7 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
         self.loss_fn = loss_fn if loss_fn is not None else LFLoss(args)
 
         # evaluator returns (acc, power)
-        self.evaluator = Evaluator(args)
+        self.power = Evaluator(args)
 
         num_classes = topology[-1]
         self.train_loader = train_loader
